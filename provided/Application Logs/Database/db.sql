@@ -9,7 +9,7 @@ drop view if exists vw_edi_last;
 
 drop view if exists vw_tranship_pipeline;
 
-drop table if exists api_event;      
+drop table if exists api_event;
 
 drop table if exists edi_message;    
 
