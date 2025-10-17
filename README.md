@@ -1,58 +1,53 @@
-# Svelte library
+# Portwarden AI
 
-Everything you need to build a Svelte library, powered by [`sv`](https://npmjs.com/package/sv).
+Portwarden AI is a hackathon-ready SvelteKit prototype that showcases an intelligent duty-officer co-pilot for maritime operations. It fuses layered data correlation, a curated knowledge base, and on-demand Gemini playbooks into one cockpit view.
 
-Read more about creating a library [in the docs](https://svelte.dev/docs/kit/packaging).
+## Features
 
-## Creating a project
+- Unified incident timeline for email, SMS, and workflow alerts seeded from `/provided` sample data
+- Layered evidence panels: ingestion facts, correlated log/SQL proof, and knowledge-base matches
+- Guided remediation cards with executable SQL and API actions
+- Gemini LLM integration for playbook generation and escalation briefs (retrieval-augmented)
+- Responsive dark UI built with the supplied Svelte template
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Quickstart
 
 ```sh
-npm run dev
+npm install
 
-# or start the server and open the app in a new browser tab
+# export your Gemini key before starting the dev server
+export GEMINI_API_KEY="your-google-ai-studio-key"
+
 npm run dev -- --open
 ```
 
-Everything inside `src/lib` is part of your library, everything inside `src/routes` can be used as a showcase or preview app.
+Environment variables:
 
-## Building
+- `GEMINI_API_KEY` (required) – key from Google AI Studio (Gemini 1.5 models)
+- `GEMINI_MODEL` (optional) – override model name, defaults to `gemini-1.5-flash`
 
-To build your library:
+## Project layout highlights
 
-```sh
-npm pack
-```
+- `src/routes/+page.svelte` – Portwarden AI cockpit UI
+- `src/lib/data/incidents.js` – curated RAG dataset built from `/provided` materials
+- `src/routes/api/gemini/+server.js` – server-side Gemini integration with prompt orchestration
 
-To create a production version of your showcase app:
+## Gemini API notes
 
-```sh
-npm run build
-```
+- The server route uses `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`
+- Responses are constrained for operational tone and cite `[KB-xxxx]` references from the bundled knowledge snippets
+- Errors are surfaced to the UI via a toast banner so testers can validate API plumbing quickly
 
-You can preview the production build with `npm run preview`.
+## Scripts
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- `npm run dev` – start SvelteKit locally
+- `npm run build` – produce a production build
+- `npm run preview` – preview the production bundle
 
-## Publishing
+## Provided data
 
-Go into the `package.json` and give your package the desired name through the `"name"` option. Also consider adding a `"license"` field and point it to a `LICENSE` file which you can create from a template (one popular option is the [MIT license](https://opensource.org/license/mit/)).
+The `/provided/Application Logs/Database/db.sql` file seeds vessels, containers, EDI messages, and advice history used for correlation demos. The UI references these snapshots to keep the prototype grounded in realistic maritime telemetry.
 
-To publish your library to [npm](https://www.npmjs.com):
+---
 
-```sh
-npm publish
-```
+This codebase remains adapter-agnostic; add the deployment adapter of your choice when you are ready to host the prototype.
