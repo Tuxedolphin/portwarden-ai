@@ -1,9 +1,0 @@
-.landing {
-	display: flex;
-	flex-direction: column;
-	gap: clamp(3rem, 8vw, 5rem);
-}
-
-.section--error {
-	padding-top: 0;
-}
