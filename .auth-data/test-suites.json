@@ -1,0 +1,28 @@
+{
+  "EDI": {
+    "tests": [
+      {
+        "name": "EDI Message Queue Status",
+        "query": "How do I check the EDI message queue status?",
+        "category": "procedure",
+        "expectedOutcome": "Clear steps to check queue with proper verification"
+      },
+      {
+        "name": "Partner Connectivity Issues",
+        "query": "EDI partner is not responding, what should I do?",
+        "category": "troubleshooting",
+        "expectedOutcome": "Diagnostic steps with escalation path"
+      }
+    ]
+  },
+  "VSL": {
+    "tests": [
+      {
+        "name": "Vessel Schedule Validation",
+        "query": "How do I validate vessel schedule data?",
+        "category": "procedure",
+        "expectedOutcome": "Step-by-step validation with safety checks"
+      }
+    ]
+  }
+}

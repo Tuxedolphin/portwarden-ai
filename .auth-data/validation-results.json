@@ -1,0 +1,57 @@
+{
+  "results": {
+    "CNTR_1740787713_1760756870012": {
+      "testId": "CNTR_1740787713_1760756870012",
+      "timestamp": "2025-10-18T03:07:50.012Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Subject: Escalation: ALR-861600 - Duplicate Container Snapshot (CMAU0000020)\n\nLeadership,\n\nIncident ALR-861600 reports a duplicate snapshot for container CMAU",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 81,
+      "passed": true
+    }
+  },
+  "summary": {
+    "totalTests": 1,
+    "passedTests": 1,
+    "failedTests": 0,
+    "avgAccuracy": 81,
+    "lastRun": "2025-10-18T03:07:50.014Z"
+  }
+}
