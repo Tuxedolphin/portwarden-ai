@@ -160,14 +160,56 @@
       "context": "playbook_generation",
       "sessionId": "session_1760759903927_rey3w0zt9",
       "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:03:43.754Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760803423754_gnfz9c9xx",
+      "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:04:15.506Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760803455506_a84hh8l77",
+      "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:04:30.245Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760803470245_aj3bumaev",
+      "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:04:40.684Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760803480683_4l3jrlrqz",
+      "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:05:12.511Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760803512511_lueqb9kyt",
+      "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:07:21.184Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "escalation_generation",
+      "sessionId": "session_1760803641184_o0elx5365",
+      "day": "2025-10-18"
     }
   ],
   "dailyStats": {
     "2025-10-18": {
       "articles": {
-        "CNTR: Duplicate Container information received": 23
+        "CNTR: Duplicate Container information received": 29
       },
-      "totalAccess": 23,
+      "totalAccess": 29,
       "uniqueArticles": 1
     }
   },

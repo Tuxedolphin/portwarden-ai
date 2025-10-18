@@ -18,7 +18,7 @@ export const layers = [
 		title: 'Guided Remediation Co-Pilot',
 		kicker: 'Layer 3',
 		description:
-			'Generates playbooks, SQL fixes, and escalation briefs with Gemini-based RAG so the first responder can resolve or delegate within minutes.'
+			'Generates playbooks, SQL fixes, and escalation briefs with GPT-5-guided RAG so the first responder can resolve or delegate within minutes.'
 	}
 ];
 
@@ -36,6 +36,6 @@ export const impactHighlights = [
 	{
 		label: 'Escalation latency',
 		value: '< 2 min',
-		subtext: 'Gemini drafts summaries and owner routing on demand.'
+		subtext: 'GPT-5 drafts summaries and owner routing on demand.'
 	}
 ];

@@ -1,13 +1,14 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { getIncidentById } from '$lib/data/incidents';
-import { generateAIContext, searchKnowledgeBase } from '$lib/data/knowledgeBase.js';
-import { generateTrainingContext, findSimilarCases } from '$lib/data/caseLog.js';
-import { analyzeResponsePatterns, generateResponseTemplates } from '$lib/ai/trainingAnalyzer.js';
+import { generateAIContext } from '$lib/data/knowledgeBase.js';
+import { generateResponseTemplates } from '$lib/ai/trainingAnalyzer.js';
 import { KnowledgeBaseTracker } from '$lib/ai/KnowledgeBaseTracker.js';
 import { ValidationFramework } from '$lib/ai/ValidationFramework.js';
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_DEPLOYMENT = 'gpt-5-mini';
+const DEFAULT_ENDPOINT = 'https://psacodesprint2025.azure-api.net/gpt-5-mini/openai';
+const DEFAULT_API_VERSION = '2025-01-01-preview';
 
 // Initialize AI enhancement components
 const kbTracker = new KnowledgeBaseTracker();
@@ -33,7 +34,7 @@ function buildPrompt(incident, intent, sessionId) {
 
 	// Track knowledge base access (with error handling)
 	try {
-		incident.knowledgeBase.forEach(entry => {
+		incident.knowledgeBase.forEach((entry) => {
 			kbTracker.trackArticleAccess(entry.title, `${intent}_generation`, sessionId);
 		});
 	} catch (error) {
@@ -48,7 +49,7 @@ function buildPrompt(incident, intent, sessionId) {
 	// Concise evidence summary (limit to 3 most recent)
 	const recentEvidence = incident.correlatedEvidence
 		.slice(-3)
-		.map(e => `${e.source}: ${e.message.substring(0, 80)}...`)
+		.map((e) => `${e.source}: ${e.message.substring(0, 80)}...`)
 		.join('; ');
 
 	// Enhanced context but limit length
@@ -73,9 +74,10 @@ function buildPrompt(incident, intent, sessionId) {
 		console.warn('Error generating response templates:', error);
 	}
 
-	const intentInstruction = intent === 'playbook'
-		? 'Generate step-by-step playbook with verification checks. Reference KB articles. Include "Ready to close" checklist.'
-		: 'Draft escalation summary <180 words: incident snapshot, mitigation, risks, ask, timeline.';
+	const intentInstruction =
+		intent === 'playbook'
+			? 'Generate step-by-step playbook with verification checks. Reference KB articles. Include "Ready to close" checklist.'
+			: 'Draft escalation summary <180 words: incident snapshot, mitigation, risks, ask, timeline.';
 
 	// Compact prompt structure
 	return [
@@ -86,13 +88,15 @@ function buildPrompt(incident, intent, sessionId) {
 		aiContext ? `Context: ${aiContext}` : '',
 		`Actions: ${actionSummary}`,
 		recentEvidence ? `Evidence: ${recentEvidence}` : '',
-		incident.escalation.required 
-			? `Escalation: ${incident.escalation.owner} (${incident.escalation.team})` 
+		incident.escalation.required
+			? `Escalation: ${incident.escalation.owner} (${incident.escalation.team})`
 			: 'No escalation required',
 		incident.ragExtract ? `Guidance: ${incident.ragExtract.substring(0, 150)}...` : '',
 		templateHint,
 		intentInstruction
-	].filter(Boolean).join('\n\n');
+	]
+		.filter(Boolean)
+		.join('\n\n');
 }
 
 /**
@@ -102,13 +106,13 @@ function buildPrompt(incident, intent, sessionId) {
  */
 function extractModuleFromIncident(incident) {
 	const description = (incident.summary + ' ' + incident.title).toLowerCase();
-	
+
 	if (description.includes('container') || description.includes('cntr')) return 'CNTR';
 	if (description.includes('edi') || description.includes('edifact')) return 'EDI';
 	if (description.includes('vessel') || description.includes('vsl')) return 'VSL';
 	if (description.includes('auth') || description.includes('token')) return 'AUTH';
 	if (description.includes('booking')) return 'BOOKING';
-	
+
 	return 'GENERAL';
 }
 
@@ -141,119 +145,109 @@ export async function POST(event) {
 		return json({ error: 'Incident not found.' }, { status: 404 });
 	}
 
-	if (!env.GEMINI_API_KEY) {
-		return json({ error: 'GEMINI_API_KEY is not set on the server.' }, { status: 500 });
+	if (!env.AZURE_OPENAI_KEY) {
+		return json({ error: 'AZURE_OPENAI_KEY is not set on the server.' }, { status: 500 });
 	}
 
-	const model = env.GEMINI_MODEL ?? DEFAULT_MODEL;
+	const endpoint = env.AZURE_OPENAI_ENDPOINT ?? DEFAULT_ENDPOINT;
+	const deployment = env.AZURE_OPENAI_DEPLOYMENT ?? DEFAULT_DEPLOYMENT;
+	const apiVersion = env.AZURE_OPENAI_API_VERSION ?? DEFAULT_API_VERSION;
+	const model = env.AZURE_OPENAI_MODEL ?? deployment;
 	const sessionId = generateSessionId();
 	const prompt = buildPrompt(incident, intent, sessionId);
 
+	const normalizedEndpoint = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
+	const requestUrl = `${normalizedEndpoint}/deployments/${deployment}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
+
 	// Debug logging for troubleshooting
-	console.log('Gemini API Request Details:');
+	console.log('Azure OpenAI Request Details:');
+	console.log('- Endpoint:', requestUrl);
 	console.log('- Model:', model);
 	console.log('- Incident ID:', incidentId);
 	console.log('- Intent:', intent);
-	console.log('- System instruction tokens (approx):', Math.ceil(SYSTEM_TEXT.length / 4));
+	console.log('- System message tokens (approx):', Math.ceil(SYSTEM_TEXT.length / 4));
 	console.log('- Prompt length:', prompt.length);
 	console.log('- Prompt tokens (approx):', Math.ceil(prompt.length / 4));
 	console.log('- Total tokens (approx):', Math.ceil((SYSTEM_TEXT.length + prompt.length) / 4));
 	console.log('- Session ID:', sessionId);
 
-	const response = await fetch(
-		`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
-		{
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				systemInstruction: {
-					role: 'system',
-					parts: [{ text: SYSTEM_TEXT }]
-				},
-				contents: [
-					{
-						role: 'user',
-						parts: [{ text: prompt }]
-					}
-				],
-				generationConfig: {
-					temperature: 0.3,
-					topP: 0.8,
-					topK: 40,
-					maxOutputTokens: 2048
-				}
-			})
-		}
-	);
+	const requestBody = {
+		model,
+		messages: [
+			{ role: 'system', content: SYSTEM_TEXT },
+			{ role: 'user', content: prompt }
+		],
+	};
 
-	const data = await response.json();
+	const response = await fetch(requestUrl, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'api-key': env.AZURE_OPENAI_KEY
+		},
+		body: JSON.stringify(requestBody)
+	});
 
-	// Enhanced error logging for debugging
-	console.log('Gemini API Response Status:', response.status);
-	
-	// Log token usage if available
-	if (data?.usageMetadata) {
-		console.log('Token Usage:', {
-			promptTokens: data.usageMetadata.promptTokenCount,
-			totalTokens: data.usageMetadata.totalTokenCount,
-			thoughtsTokens: data.usageMetadata.thoughtsTokenCount || 0
-		});
+	const data = await response.json().catch(() => null);
+
+	console.log('Azure OpenAI Response Status:', response.status);
+
+	if (data?.usage) {
+		console.log('Token Usage:', data.usage);
 	}
-	
-	console.log('Gemini API Response Data:', JSON.stringify(data, null, 2));
 
 	if (!response.ok) {
-		console.error('Gemini API Error:', data?.error);
+		console.error('Azure OpenAI Error:', data?.error ?? data);
 		return json(
-			{ error: data?.error?.message ?? 'Gemini API request failed.' },
+			{ error: data?.error?.message ?? 'Azure OpenAI request failed.' },
 			{ status: response.status }
 		);
 	}
 
-	// Check for blocked content or other issues
-	if (data?.candidates?.[0]?.finishReason && data.candidates[0].finishReason !== 'STOP') {
-		console.error('Gemini finished with reason:', data.candidates[0].finishReason);
-		const reason = data.candidates[0].finishReason;
+	const choice = data?.choices?.[0];
+	const finishReason = choice?.finish_reason;
+
+	if (finishReason && finishReason !== 'stop') {
+		console.error('Azure OpenAI finished with reason:', finishReason);
 		let errorMsg = 'Content generation stopped unexpectedly.';
-		
-		if (reason === 'SAFETY') {
-			errorMsg = 'Content was blocked due to safety filters.';
-		} else if (reason === 'RECITATION') {
-			errorMsg = 'Content was blocked due to recitation concerns.';
-		} else if (reason === 'MAX_TOKENS') {
+
+		if (finishReason === 'content_filter') {
+			errorMsg = 'Content was blocked by safety filters.';
+		} else if (finishReason === 'length') {
 			errorMsg = 'Response was truncated due to length limits.';
 		}
-		
-		return json({ error: errorMsg, reason }, { status: 502 });
+
+		return json({ error: errorMsg, reason: finishReason }, { status: 502 });
 	}
 
-	const textParts = data?.candidates?.[0]?.content?.parts;
-	console.log('Text parts found:', textParts?.length || 0);
-	
-	const output = Array.isArray(textParts)
-		? textParts
-				.map((part) => part.text)
+	let output = '';
+
+	if (choice?.message?.content) {
+		if (Array.isArray(choice.message.content)) {
+			const parts = /** @type {Array<string | { text?: string }>} */ (choice.message.content);
+			output = parts
+				.map((part) => (typeof part === 'string' ? part : part?.text || ''))
 				.filter(Boolean)
 				.join('\n')
-				.trim()
-		: '';
-
-	console.log('Final output length:', output?.length || 0);
+				.trim();
+		} else if (typeof choice.message.content === 'string') {
+			output = choice.message.content.trim();
+		}
+	}
 
 	if (!output) {
 		console.error('Empty output detected. Full response:', JSON.stringify(data, null, 2));
-		return json({ 
-			error: 'Gemini response was empty.',
-			debug: {
-				candidates: data?.candidates?.length || 0,
-				finishReason: data?.candidates?.[0]?.finishReason,
-				hasContent: !!data?.candidates?.[0]?.content,
-				hasParts: !!data?.candidates?.[0]?.content?.parts,
-				partsCount: data?.candidates?.[0]?.content?.parts?.length || 0
-			}
-		}, { status: 502 });
+		return json(
+			{
+				error: 'Azure OpenAI response was empty.',
+				debug: {
+					hasChoices: !!data?.choices?.length,
+					finishReason,
+					messageType: typeof choice?.message?.content
+				}
+			},
+			{ status: 502 }
+		);
 	}
 
 	// Validate the AI response for quality and compliance
@@ -261,10 +255,10 @@ export async function POST(event) {
 		const module = extractModuleFromIncident(incident);
 		const query = `${intent} for ${incident.title}: ${incident.summary}`;
 		const validation = await validator.validateResponse(query, output, module);
-		
+
 		// Track validation results but don't block response
 		console.log(`Validation score: ${validation.overallScore}% for ${sessionId}`);
-		
+
 		// If validation score is very low, log for review
 		if (validation.overallScore < 50) {
 			console.warn(`Low quality response detected: ${sessionId}`, {
@@ -277,11 +271,12 @@ export async function POST(event) {
 		// Continue without blocking the response
 	}
 
-	return json({ 
+	return json({
 		output,
 		sessionId,
 		metadata: {
 			model,
+			deployment,
 			intent,
 			incidentId,
 			timestamp: new Date().toISOString()

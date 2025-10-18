@@ -1,94 +1,94 @@
 <script>
-import { incidents } from '$lib/data/incidents';
-import { impactHighlights, layers } from '$lib/data/architecture';
-import ErrorViewer from '$lib/ErrorViewer.svelte';
-import Header from '$lib/components/Header.svelte';
-import { translateError } from '$lib/errorTranslator';
-import { onMount } from 'svelte';
+	import { incidents } from '$lib/data/incidents';
+	import { impactHighlights, layers } from '$lib/data/architecture';
+	import ErrorViewer from '$lib/ErrorViewer.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import { translateError } from '$lib/errorTranslator';
+	import { onMount } from 'svelte';
 
-/** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
-let errorObj = null;
+	/** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
+	let errorObj = null;
 
-let scrollY = 0;
-let innerHeight = 0;
+	let scrollY = 0;
+	let innerHeight = 0;
 
-// Counter animation state
-let teusProcessed = 0;
-let responseTime = 0;
-let mounted = false;
+	// Counter animation state
+	let teusProcessed = 0;
+	let responseTime = 0;
+	let mounted = false;
 
-const severityPalette = {
-	Critical: 'critical',
-	High: 'high',
-	Medium: 'medium',
-	Low: 'low'
-};
+	const severityPalette = {
+		Critical: 'critical',
+		High: 'high',
+		Medium: 'medium',
+		Low: 'low'
+	};
 
-/** @param {string|undefined} key */
-function safeSeverity(key) {
-	if (!key) return 'medium';
-	if (key === 'Critical') return severityPalette.Critical;
-	if (key === 'High') return severityPalette.High;
-	if (key === 'Medium') return severityPalette.Medium;
-	if (key === 'Low') return severityPalette.Low;
-	return 'medium';
-}
-
-/** @param {any} value */
-function formatTimestamp(value) {
-	if (!value) return 'n/a';
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return value;
-	return date.toLocaleString('en-US', {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-		timeZone: 'UTC'
-	});
-}
-
-/** @param {number} target @param {number} duration @param {(value: number) => void} callback */
-function animateCounter(target, duration, callback) {
-	const start = performance.now();
-	const startValue = 0;
-	
-	/** @param {number} timestamp */
-	function update(timestamp) {
-		const elapsed = timestamp - start;
-		const progress = Math.min(elapsed / duration, 1);
-		
-		// Smoother easing function
-		const easeOutExpo = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-		const current = startValue + (target - startValue) * easeOutExpo;
-		
-		callback(current);
-		
-		if (progress < 1) {
-			requestAnimationFrame(update);
-		} else {
-			// Ensure we end exactly on the target value
-			callback(target);
-		}
+	/** @param {string|undefined} key */
+	function safeSeverity(key) {
+		if (!key) return 'medium';
+		if (key === 'Critical') return severityPalette.Critical;
+		if (key === 'High') return severityPalette.High;
+		if (key === 'Medium') return severityPalette.Medium;
+		if (key === 'Low') return severityPalette.Low;
+		return 'medium';
 	}
-	
-	requestAnimationFrame(update);
-}
 
-onMount(() => {
-	mounted = true;
-	
-	// Start counter animations with less staggered delays for smoother feel
-	setTimeout(() => {
-		animateCounter(10, 1800, (value) => {
-			teusProcessed = value;
+	/** @param {any} value */
+	function formatTimestamp(value) {
+		if (!value) return 'n/a';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value;
+		return date.toLocaleString('en-US', {
+			dateStyle: 'medium',
+			timeStyle: 'short',
+			timeZone: 'UTC'
 		});
-	}, 300);
-	
-	setTimeout(() => {
-		animateCounter(2, 2000, (value) => {
-			responseTime = value;
-		});
-	}, 600);
-});
+	}
+
+	/** @param {number} target @param {number} duration @param {(value: number) => void} callback */
+	function animateCounter(target, duration, callback) {
+		const start = performance.now();
+		const startValue = 0;
+
+		/** @param {number} timestamp */
+		function update(timestamp) {
+			const elapsed = timestamp - start;
+			const progress = Math.min(elapsed / duration, 1);
+
+			// Smoother easing function
+			const easeOutExpo = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+			const current = startValue + (target - startValue) * easeOutExpo;
+
+			callback(current);
+
+			if (progress < 1) {
+				requestAnimationFrame(update);
+			} else {
+				// Ensure we end exactly on the target value
+				callback(target);
+			}
+		}
+
+		requestAnimationFrame(update);
+	}
+
+	onMount(() => {
+		mounted = true;
+
+		// Start counter animations with less staggered delays for smoother feel
+		setTimeout(() => {
+			animateCounter(10, 1800, (value) => {
+				teusProcessed = value;
+			});
+		}, 300);
+
+		setTimeout(() => {
+			animateCounter(2, 2000, (value) => {
+				responseTime = value;
+			});
+		}, 600);
+	});
 </script>
 
 <svelte:window bind:scrollY bind:innerHeight />
@@ -143,9 +143,11 @@ onMount(() => {
 	<div class="operations-content">
 		<div class="section-header">
 			<h2 class="section-title">Port Operations Intelligence</h2>
-			<p class="section-subtitle">Real-time monitoring and AI-powered insights for maritime operations</p>
+			<p class="section-subtitle">
+				Real-time monitoring and AI-powered insights for maritime operations
+			</p>
 		</div>
-		
+
 		<div class="metrics-grid">
 			{#each impactHighlights as highlight}
 				<div class="metric-card">
@@ -165,7 +167,7 @@ onMount(() => {
 			<h2 class="section-title">AI-Powered Maritime Technology</h2>
 			<p class="section-subtitle">Three-layer architecture for comprehensive port management</p>
 		</div>
-		
+
 		<div class="tech-grid">
 			{#each layers as layer, index}
 				<div class="tech-card" style="animation-delay: {index * 0.2}s">
@@ -187,20 +189,22 @@ onMount(() => {
 			<h2 class="section-title">Live Incidents Dashboard</h2>
 			<p class="section-subtitle">Real-time incident monitoring and AI-powered assistance</p>
 		</div>
-		
+
 		<div class="dashboard-grid">
 			<div class="incident-sidebar">
 				<div class="panel-header">
 					<h3>Live Incidents</h3>
 					<span class="incident-count">{incidents.length} Active</span>
 				</div>
-				
+
 				<div class="incident-list-items">
 					{#each incidents.slice(0, 5) as incident}
 						<div class="incident-item">
 							<div class="incident-header">
 								<span class="incident-id">{incident.displayId}</span>
-								<span class="severity-badge {safeSeverity(incident.severity)}">{incident.severity}</span>
+								<span class="severity-badge {safeSeverity(incident.severity)}"
+									>{incident.severity}</span
+								>
 							</div>
 							<h4 class="incident-title">{incident.title}</h4>
 							<p class="incident-summary">{incident.summary}</p>
@@ -211,16 +215,16 @@ onMount(() => {
 						</div>
 					{/each}
 				</div>
-				
+
 				<a href="/incidents" class="view-all-btn">View All Incidents →</a>
 			</div>
-			
+
 			<div class="incident-detail-panel">
 				<div class="panel-header">
 					<h3>Port Operations Overview</h3>
 					<div class="status-indicator online">System Online</div>
 				</div>
-				
+
 				<div class="operations-overview">
 					<div class="overview-grid">
 						<div class="overview-stat">
@@ -244,7 +248,7 @@ onMount(() => {
 							<span class="overview-trend">Average</span>
 						</div>
 					</div>
-					
+
 					<div class="next-actions">
 						<h4>Quick Actions</h4>
 						<div class="action-grid">
@@ -304,8 +308,8 @@ onMount(() => {
 		right: 0;
 		bottom: 0;
 		background: linear-gradient(
-			180deg, 
-			rgba(10, 15, 28, 0.2) 0%, 
+			180deg,
+			rgba(10, 15, 28, 0.2) 0%,
 			rgba(10, 15, 28, 0.7) 50%,
 			rgba(10, 15, 28, 0.95) 100%
 		);
@@ -445,7 +449,9 @@ onMount(() => {
 		border: 1px solid rgba(148, 163, 184, 0.2);
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 		backdrop-filter: blur(10px);
-		transition: transform 0.3s ease, box-shadow 0.3s ease;
+		transition:
+			transform 0.3s ease,
+			box-shadow 0.3s ease;
 		position: relative;
 		overflow: hidden;
 	}
@@ -758,8 +764,13 @@ onMount(() => {
 	}
 
 	@keyframes pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
 	}
 
 	.detail-sections {
@@ -834,15 +845,15 @@ onMount(() => {
 			align-items: flex-start;
 			gap: 0.75rem;
 		}
-		
+
 		.panel-header h3 {
 			font-size: 1.1rem;
 		}
-		
+
 		.status-indicator.online {
 			align-self: flex-end;
 		}
-		
+
 		.overview-grid {
 			grid-template-columns: 1fr;
 		}
@@ -1014,7 +1025,7 @@ onMount(() => {
 		gap: 2rem;
 	}
 
-	.gemini-interface {
+	.gpt-interface {
 		display: flex;
 		gap: 1rem;
 		align-items: flex-start;
@@ -1080,7 +1091,11 @@ onMount(() => {
 	}
 
 	@keyframes bounce {
-		0%, 20%, 50%, 80%, 100% {
+		0%,
+		20%,
+		50%,
+		80%,
+		100% {
 			transform: translateX(-50%) rotate(45deg) translateY(0);
 		}
 		40% {
