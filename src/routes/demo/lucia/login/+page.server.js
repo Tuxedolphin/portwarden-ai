@@ -17,12 +17,14 @@ export const actions = {
 	login: async (event) => {
 		// Check if database is available
 		if (!db) {
-			return fail(503, { message: 'Database not available - this is a demo feature that requires database setup.' });
+			return fail(503, {
+				message: 'Database not available - this is a demo feature that requires database setup.'
+			});
 		}
 
 		const formData = await event.request.formData();
-	const username = String(formData.get('username') ?? '');
-	const password = String(formData.get('password') ?? '');
+		const username = String(formData.get('username') ?? '');
+		const password = String(formData.get('password') ?? '');
 
 		if (!validateUsername(username)) {
 			return fail(400, {
@@ -33,14 +35,14 @@ export const actions = {
 			return fail(400, { message: 'Invalid password (min 6, max 255 characters)' });
 		}
 
-	const results = await db.select().from(table.users).where(eq(table.users.email, username));
+		const results = await db.select().from(table.users).where(eq(table.users.email, username));
 
 		const existingUser = results.at(0);
 		if (!existingUser) {
 			return fail(400, { message: 'Incorrect username or password' });
 		}
 
-	const validPassword = await verify(existingUser.passwordHash, String(password), {
+		const validPassword = await verify(existingUser.passwordHash, String(password), {
 			memoryCost: 19456,
 			timeCost: 2,
 			outputLen: 32,
@@ -50,20 +52,22 @@ export const actions = {
 			return fail(400, { message: 'Incorrect username or password' });
 		}
 
-	const session = await auth.createSession(existingUser.id);
-	auth.setSessionCookie(event, session);
+		const session = await auth.createSession(existingUser.id);
+		auth.setSessionCookie(event, session);
 
 		return redirect(302, '/demo/lucia');
 	},
 	register: async (event) => {
 		// Check if database is available
 		if (!db) {
-			return fail(503, { message: 'Database not available - this is a demo feature that requires database setup.' });
+			return fail(503, {
+				message: 'Database not available - this is a demo feature that requires database setup.'
+			});
 		}
 
 		const formData = await event.request.formData();
-	const username = String(formData.get('username') ?? '');
-	const password = String(formData.get('password') ?? '');
+		const username = String(formData.get('username') ?? '');
+		const password = String(formData.get('password') ?? '');
 
 		if (!validateUsername(username)) {
 			return fail(400, { message: 'Invalid username' });
@@ -72,7 +76,7 @@ export const actions = {
 			return fail(400, { message: 'Invalid password' });
 		}
 
-	const passwordHash = await hash(String(password), {
+		const passwordHash = await hash(String(password), {
 			// recommended minimum parameters
 			memoryCost: 19456,
 			timeCost: 2,
@@ -83,7 +87,10 @@ export const actions = {
 		try {
 			await db.insert(table.users).values({ email: String(username), name: 'Demo', passwordHash });
 
-			const [created] = await db.select().from(table.users).where(eq(table.users.email, String(username)));
+			const [created] = await db
+				.select()
+				.from(table.users)
+				.where(eq(table.users.email, String(username)));
 			const session = await auth.createSession(created.id);
 			auth.setSessionCookie(event, session);
 		} catch {

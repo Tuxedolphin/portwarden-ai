@@ -18,8 +18,8 @@ export async function PATCH(event) {
 
 	try {
 		// Find the incident in our mock data
-		const incident = incidents.find(inc => inc.id === incidentId);
-		
+		const incident = incidents.find((inc) => inc.id === incidentId);
+
 		if (!incident) {
 			throw error(404, 'Incident not found');
 		}

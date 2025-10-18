@@ -3,8 +3,8 @@ import { sessionCookieName, clearSessionCookie, invalidateSession } from '$lib/s
 
 /** @param {import('@sveltejs/kit').RequestEvent} event */
 export async function POST(event) {
-  const sid = event.cookies.get(sessionCookieName);
-  if (sid) await invalidateSession(sid);
-  clearSessionCookie(event);
-  return json({ ok: true });
+	const sid = event.cookies.get(sessionCookieName);
+	if (sid) await invalidateSession(sid);
+	clearSessionCookie(event);
+	return json({ ok: true });
 }

@@ -176,13 +176,58 @@
       },
       "overallScore": 91,
       "passed": true
+    },
+    "CNTR_1740787713_1760803750605": {
+      "testId": "CNTR_1740787713_1760803750605",
+      "timestamp": "2025-10-18T16:09:10.605Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Action Plan (Yard Duty Officer) — ALR-861600: Duplicate container snapshot for CMAU0000020\n\n1) Detect duplicate snapshots (Label: Detect)\n- Purpose: Confirm duplicated snapshots exist before remediation (KB-2210).\n- Command (SQL):\n```sql\n-- Type: SQL\nSELECT id, cntr_no, snapshot_ts, created_at, archived\nFROM container\nWHERE cntr_no = 'CMAU0000020'\nORDER BY snapshot_ts DESC, created_at DESC;\n```\n- Verification: Confirm >1 row returned with identical or near-identical snapshot_ts (logs already show two rows). Record the latest id as keep_id.\n\n2) Isolate and preserve the latest snapshot (Label: PreserveLatest)\n- Purpose: Ensure operational state preserved, avoid data loss (KB-2210).\n- Steps:\n  a) Identify keep_id:\n```sql\n-- Type: SQL\nSELECT id\nFROM container\nWHERE cntr_no = 'CMAU0000020'\nORDER BY snapshot_ts DESC, created_at DESC\nLIMIT 1;\n```\n  b) Mark older rows archived (preferred over deletion):\n```sql\n-- Type: SQL\nBEGIN;\nUPDATE container\nSET archived = TRUE, archived_at = NOW(), archive_reason = 'Duplicate snapshot cleanup ALR-861600'\nWHERE cntr_no = 'CMAU0000020' AND id <> <keep_id>;\nCOMMIT;\n```\n- Verification: Re-run detection query to show only one non-archived row:\n```sql\n-- Type: SQL\nSELECT COUNT(*) AS active_rows\nFROM container\nWHERE cntr_no = 'CMAU0000020' AND archived = FALSE;\n```\nExpected active_rows = 1.\n\n3) Archive older duplicate rows into archive table (Label: Archive)\n- Purpose: Retain full audit trail and evidence (safety/compliance).\n- Command (SQL):\n```sql\n-- Type: SQL\nBEGIN;\nINSERT INTO container_archive (id, cntr_no, snapshot_ts, data, created_at, archived_at, archive_reason)\nSELECT id, cntr_no, snapshot_ts, data, created_at, NOW(), 'Duplicate snapshot cleanup ALR-861600'\nFROM container\nWHERE cntr_no = 'CMAU0000020' AND id <> <keep_id>;\n\n-- Optional: soft-delete or delete after archival policy\nDELETE FROM container\nWHERE cntr_no = 'CMAU0000020' AND id <> <keep_id>;\nCOMMIT;\n```\n- Verification: Confirm rows moved:\n```sql\n-- Type: SQL\nSELECT COUNT(*) FROM container_archive WHERE cntr_no = 'CMAU0000020';\n```\n\n4) Rebuild cache consumers / downstream sync (Label: RebuildConsumers)\n- Purpose: Ensure APIs and yard display services reflect corrected inventory (KB-2210).\n- API call (example):\n```http\n# Type: HTTP\nPOST /internal/cache/rebuild\nHost: api.portwarden.local\nAuthorization: Bearer <service-token>\nContent-Type: application/json\n\n{\n  \"resource\": \"container\",\n  \"identifier\": \"CMAU0000020\",\n  \"reason\": \"Duplicate snapshot cleanup ALR-861600\"\n}\n```\n- Verification:\n  - Confirm HTTP 200 with job id.\n  - Check consumer logs and API responses for CMAU0000020:\n```http\n# Type: HTTP\nGET /v1/containers/CMAU0000020\nHost: api.portwarden.local\nAuthorization: Bearer <service-token>\n```\nExpect single, correct snapshot returned.\n\n5) Validate logs and stop-gap monitoring (Label: ValidateMonitor)\n- Purpose: Ensure no ongoing duplicate attempts and that mitigation is effective.\n- Steps:\n  - Tail service logs for DuplicateSnapshotAttempt entries for CMAU0000020 over the next 2 hours:\n    - container_service.log\n  - Verify no repeated insert attempts in DB audit:\n```sql\n-- Type: SQL\nSELECT created_at, message\nFROM system_audit\nWHERE object_type = 'container' AND object_id = 'CMAU0000020'\nORDER BY created_at DESC\nLIMIT 20;\n```\n- Verification criteria:\n  - No new DuplicateSnapshotAttempt WARN entries after remediation.\n  - No new duplicate rows created within 1s window.\n\n6) Follow-up actions and KB update (Label: FollowUp)\n- Purpose: Prevent recurrence and document resolution.\n- Actions:\n  - Raise a ticket to dev team to review producer service that emitted duplicate snapshots (include logs: container_service.log lines).\n  - Update incident record and reference KB-2210 (CNTR-024) with steps taken and timestamps.\n  - Consider adding a short-term alert: trigger when same cntr_no inserted >1 time within 5s.\n- Verification:\n  - Confirm ticket created with link and assigned owner.\n  - Confirm KB updated entry added with incident id ALR-861600.\n\nNotes: Evidence observed: container_service.log WARN DuplicateSnapshotAttempt; DB showed two rows with same timestamps. No escalation required per guidance. Preserve audit trail per policy.\n\nDraft escalation summary (for email) — keep <180 words:\n\nSubject: ALR-861600 — Duplicate container snapshot detected for CMAU0000020 (No escalation)\n\nSummary:\nOn [timestamp], the data quality monitor flagged ALR-861600: two container snapshots for CMAU0000020 were recorded within one second, creating inconsistent yard inventory views. Mitigation: we identified and retained the most recent snapshot, archived the older duplicate to container_archive, and triggered a downstream cache rebuild so API consumers and yard displays reflect the corrected state. Risk: transient mis-reads of yard inventory until cache rebuild completes; no operational safety impact identified. Ask: no immediate escalation required — request confirmation from the container producer team to investigate the source of rapid duplicate sends. Timeline: detection and remediation completed within the hour; follow-up ticket opened for root-cause analysis. Reference: KB-2210 (Duplicate Container information received). Evidence attached: container_service.log extract and DB audit rows.\n\nIf you want, I will run the SQL/API steps now and provide verification outputs.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
     }
   },
   "summary": {
-    "totalTests": 4,
-    "passedTests": 4,
+    "totalTests": 5,
+    "passedTests": 5,
     "failedTests": 0,
     "avgAccuracy": 87,
-    "lastRun": "2025-10-18T16:05:43.625Z"
+    "lastRun": "2025-10-18T16:09:10.608Z"
   }
 }

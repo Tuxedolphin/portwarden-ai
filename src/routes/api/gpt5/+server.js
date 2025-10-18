@@ -176,7 +176,7 @@ export async function POST(event) {
 		messages: [
 			{ role: 'system', content: SYSTEM_TEXT },
 			{ role: 'user', content: prompt }
-		],
+		]
 	};
 
 	const response = await fetch(requestUrl, {

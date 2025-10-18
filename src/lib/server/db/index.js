@@ -13,7 +13,10 @@ if (env.DATABASE_URL) {
 		db = drizzle(client, { schema, mode: 'default' });
 		console.log('Database connection established');
 	} catch (error) {
-		console.warn('Database connection failed:', error instanceof Error ? error.message : String(error));
+		console.warn(
+			'Database connection failed:',
+			error instanceof Error ? error.message : String(error)
+		);
 		db = null;
 	}
 } else {

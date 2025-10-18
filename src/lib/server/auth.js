@@ -49,11 +49,11 @@ export async function verifyPassword(hash, password) {
 export async function createSession(userId) {
 	const id = crypto.randomUUID();
 	const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-	
+
 	const sessions = readJsonFile(SESSIONS_FILE, {});
 	sessions[id] = { id, userId, expiresAt: expiresAt.toISOString() };
 	writeJsonFile(SESSIONS_FILE, sessions);
-	
+
 	return { id, expiresAt };
 }
 
@@ -61,23 +61,23 @@ export async function createSession(userId) {
 /** @param {string} sessionId */
 export async function validateSession(sessionId) {
 	if (!sessionId) return { user: null, session: null };
-	
+
 	const sessions = readJsonFile(SESSIONS_FILE, {});
 	const session = sessions[sessionId];
 	if (!session) return { user: null, session: null };
-	
+
 	if (Date.now() >= new Date(session.expiresAt).getTime()) {
 		delete sessions[sessionId];
 		writeJsonFile(SESSIONS_FILE, sessions);
 		return { user: null, session: null };
 	}
-	
+
 	const users = readJsonFile(USERS_FILE, {});
 	const user = users[session.userId];
 	if (!user) return { user: null, session: null };
-	
-	return { 
-		user: { id: user.id, email: user.email, name: user.name }, 
+
+	return {
+		user: { id: user.id, email: user.email, name: user.name },
 		session: { id: session.id, expiresAt: new Date(session.expiresAt) }
 	};
 }
@@ -126,7 +126,7 @@ export async function requireUser(event, opts = { redirectTo: '/login' }) {
 /** @param {string} email */
 export async function findUserByEmail(email) {
 	const users = readJsonFile(USERS_FILE, {});
-	return Object.values(users).find(user => user.email === email) || null;
+	return Object.values(users).find((user) => user.email === email) || null;
 }
 
 /** Create user */
@@ -135,7 +135,7 @@ export async function createUser({ email, name, password }) {
 	const users = readJsonFile(USERS_FILE, {});
 	const id = Date.now(); // Simple ID generation
 	const passwordHash = await hashPassword(password);
-	
+
 	users[id] = {
 		id,
 		email,
@@ -143,7 +143,7 @@ export async function createUser({ email, name, password }) {
 		passwordHash,
 		createdAt: new Date().toISOString()
 	};
-	
+
 	writeJsonFile(USERS_FILE, users);
 	return { id, email, name };
 }

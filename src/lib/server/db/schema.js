@@ -7,7 +7,9 @@ export const users = mysqlTable('users', {
 	email: varchar('email', { length: 255 }).notNull().unique(),
 	name: varchar('name', { length: 255 }).notNull(),
 	passwordHash: varchar('password_hash', { length: 255 }).notNull(),
-	createdAt: datetime('created_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull()
+	createdAt: datetime('created_at', { mode: 'date' })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull()
 });
 
 // Lucia sessions
@@ -34,7 +36,9 @@ export const incidents = mysqlTable('incidents', {
 	createdBy: bigint('created_by', { mode: 'number', unsigned: true })
 		.notNull()
 		.references(() => users.id),
-	createdAt: datetime('created_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	createdAt: datetime('created_at', { mode: 'date' })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
 	updatedAt: datetime('updated_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
 		.notNull()
@@ -56,6 +60,7 @@ export const archivedIssues = mysqlTable('archived_issues', {
 	incidentId: bigint('incident_id', { mode: 'number', unsigned: true }),
 	title: varchar('title', { length: 255 }).notNull(),
 	summary: text('summary').notNull(),
-	archivedAt: datetime('archived_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull()
+	archivedAt: datetime('archived_at', { mode: 'date' })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull()
 });
-
