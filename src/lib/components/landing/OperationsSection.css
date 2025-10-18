@@ -1,0 +1,30 @@
+.operations__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 1.75rem;
+}
+
+.operations__card {
+	min-height: 185px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.operations__card h3 {
+	margin: 0;
+	font-size: 2rem;
+	color: var(--pw-accent);
+}
+
+.operations__card p {
+	margin: 0;
+	color: var(--pw-text-primary);
+	font-weight: 600;
+}
+
+.operations__card span {
+	font-size: 0.9rem;
+	color: var(--pw-text-muted);
+}

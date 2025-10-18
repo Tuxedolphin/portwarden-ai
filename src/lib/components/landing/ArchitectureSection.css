@@ -1,0 +1,33 @@
+.architecture__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 1.75rem;
+}
+
+.architecture__card {
+	position: relative;
+	padding: 1.75rem;
+	display: grid;
+	gap: 1.25rem;
+}
+
+.architecture__badge {
+	align-self: flex-start;
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	background: rgba(59, 130, 246, 0.16);
+	border: 1px solid rgba(59, 130, 246, 0.35);
+	color: #dbeafe;
+	border-radius: 999px;
+	padding: 0.25rem 0.75rem;
+}
+
+.architecture__body h3 {
+	margin: 0 0 0.6rem;
+}
+
+.architecture__body p {
+	margin: 0;
+	color: var(--pw-text-secondary);
+}

@@ -1,0 +1,7 @@
+.incident-pagination {
+	display: flex;
+	justify-content: center;
+	gap: 1.25rem;
+	align-items: center;
+	color: var(--pw-text-secondary);
+}

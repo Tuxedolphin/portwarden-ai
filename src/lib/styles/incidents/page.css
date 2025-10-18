@@ -1,0 +1,24 @@
+.incidents-view {
+	display: flex;
+	flex-direction: column;
+	gap: 2.5rem;
+	padding: clamp(2.5rem, 6vw, 4rem) 0 clamp(4rem, 10vw, 5rem);
+	width: min(1200px, 100% - 3rem);
+	margin: 0 auto;
+}
+
+.toast {
+	align-self: flex-start;
+	background: rgba(56, 189, 248, 0.16);
+	border: 1px solid rgba(56, 189, 248, 0.35);
+	color: #e0f2fe;
+	padding: 0.65rem 1rem;
+	border-radius: 0.9rem;
+	font-weight: 500;
+}
+
+@media (max-width: 640px) {
+	.incidents-view {
+		width: min(100%, 100% - 2rem);
+	}
+}
