@@ -1,270 +1,271 @@
 <script>
-	import { incidents } from '$lib/data/incidents';
-	import { impactHighlights, layers } from '$lib/data/architecture';
+import { incidents } from '$lib/data/incidents';
+import { impactHighlights, layers } from '$lib/data/architecture';
+import ErrorViewer from '$lib/ErrorViewer.svelte';
+import Header from '$lib/components/Header.svelte';
+import { translateError } from '$lib/errorTranslator';
+import { onMount } from 'svelte';
 
-	const severityPalette = {
-		Critical: 'critical',
-		High: 'high',
-		Medium: 'medium',
-		Low: 'low'
-	};
+/** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
+let errorObj = null;
 
-	const syntaxMap = {
-		sql: 'sql',
-		command: 'bash',
-		template: 'text'
-	};
+let scrollY = 0;
+let innerHeight = 0;
 
-	let selectedIncident = incidents[0];
-	let playbookOutput = '';
-	let escalationOutput = '';
-	let playbookLoading = false;
-	let escalationLoading = false;
-	let toast = '';
+// Counter animation state
+let teusProcessed = 0;
+let responseTime = 0;
+let mounted = false;
 
-	function selectIncident(incident) {
-		selectedIncident = incident;
-		playbookOutput = '';
-		escalationOutput = '';
-		toast = '';
-	}
+const severityPalette = {
+	Critical: 'critical',
+	High: 'high',
+	Medium: 'medium',
+	Low: 'low'
+};
 
-	function formatTimestamp(value) {
-		if (!value) return 'n/a';
-		const date = new Date(value);
-		if (Number.isNaN(date.getTime())) return value;
-		return date.toLocaleString('en-US', {
-			dateStyle: 'medium',
-			timeStyle: 'short',
-			timeZone: 'UTC'
-		});
-	}
+/** @param {string|undefined} key */
+function safeSeverity(key) {
+	if (!key) return 'medium';
+	if (key === 'Critical') return severityPalette.Critical;
+	if (key === 'High') return severityPalette.High;
+	if (key === 'Medium') return severityPalette.Medium;
+	if (key === 'Low') return severityPalette.Low;
+	return 'medium';
+}
 
-	async function requestGemini(intent) {
-		if (!selectedIncident) return;
-		toast = '';
-		try {
-			if (intent === 'playbook') {
-				playbookLoading = true;
-			} else {
-				escalationLoading = true;
-			}
+/** @param {any} value */
+function formatTimestamp(value) {
+	if (!value) return 'n/a';
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value;
+	return date.toLocaleString('en-US', {
+		dateStyle: 'medium',
+		timeStyle: 'short',
+		timeZone: 'UTC'
+	});
+}
 
-			const response = await fetch('/api/gemini', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ incidentId: selectedIncident.id, intent })
-			});
-
-			const payload = await response.json();
-
-			if (!response.ok) {
-				throw new Error(payload.error ?? 'Gemini request failed');
-			}
-
-			if (intent === 'playbook') {
-				playbookOutput = payload.output;
-			} else {
-				escalationOutput = payload.output;
-			}
-		} catch (error) {
-			toast = error instanceof Error ? error.message : 'Unexpected error from Gemini API';
-		} finally {
-			playbookLoading = false;
-			escalationLoading = false;
+/** @param {number} target @param {number} duration @param {(value: number) => void} callback */
+function animateCounter(target, duration, callback) {
+	const start = performance.now();
+	const startValue = 0;
+	
+	/** @param {number} timestamp */
+	function update(timestamp) {
+		const elapsed = timestamp - start;
+		const progress = Math.min(elapsed / duration, 1);
+		
+		// Smoother easing function
+		const easeOutExpo = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+		const current = startValue + (target - startValue) * easeOutExpo;
+		
+		callback(current);
+		
+		if (progress < 1) {
+			requestAnimationFrame(update);
+		} else {
+			// Ensure we end exactly on the target value
+			callback(target);
 		}
 	}
+	
+	requestAnimationFrame(update);
+}
+
+onMount(() => {
+	mounted = true;
+	
+	// Start counter animations with less staggered delays for smoother feel
+	setTimeout(() => {
+		animateCounter(10, 1800, (value) => {
+			teusProcessed = value;
+		});
+	}, 300);
+	
+	setTimeout(() => {
+		animateCounter(2, 2000, (value) => {
+			responseTime = value;
+		});
+	}, 600);
+});
 </script>
 
-<div class="hero">
-	<div>
-		<h1>Portwarden AI</h1>
-		<p class="tagline">Intelligent oversight for maritime operations.</p>
-	</div>
-	<div class="hero-meta">
-		<span class="label">Hackathon prototype</span>
-		<span class="meta">Powered by Gemini + SvelteKit</span>
-	</div>
-</div>
+<svelte:window bind:scrollY bind:innerHeight />
 
-<section class="metrics">
-	{#each impactHighlights as highlight}
-		<div class="metric-card">
-			<h3>{highlight.value}</h3>
-			<p>{highlight.label}</p>
-			<span>{highlight.subtext}</span>
+<Header />
+
+<!-- Hero Section with Parallax -->
+<section class="hero-section" style="--scroll-y: {scrollY}px">
+	<div class="hero-content">
+		<div class="hero-text">
+			<h1>Portwarden AI</h1>
+			<p class="tagline">Intelligent oversight for maritime operations.</p>
+			<div class="hero-stats">
+				<div class="stat">
+					<span class="stat-number">
+						{#if teusProcessed < 1}
+							0M
+						{:else if teusProcessed < 10}
+							{Math.floor(teusProcessed)}M
+						{:else}
+							{Math.floor(teusProcessed)}M+
+						{/if}
+					</span>
+					<span class="stat-label">TEU Processed</span>
+				</div>
+				<div class="stat">
+					<span class="stat-number">24/7</span>
+					<span class="stat-label">Monitoring</span>
+				</div>
+				<div class="stat">
+					<span class="stat-number">
+						{#if responseTime < 0.1}
+							&lt;1min
+						{:else if responseTime < 2}
+							&lt;{Math.floor(responseTime) || 1}min
+						{:else}
+							&lt;{Math.floor(responseTime)}min
+						{/if}
+					</span>
+					<span class="stat-label">Response Time</span>
+				</div>
+			</div>
 		</div>
-	{/each}
+	</div>
+	<div class="scroll-indicator">
+		<div class="scroll-arrow"></div>
+	</div>
 </section>
 
-<section class="layers">
-	{#each layers as layer}
-		<article class="layer-card" id={layer.id}>
-			<span class="layer-kicker">{layer.kicker}</span>
-			<h2>{layer.title}</h2>
-			<p>{layer.description}</p>
-		</article>
-	{/each}
+<!-- Operations Overview -->
+<section class="operations-section">
+	<div class="operations-content">
+		<div class="section-header">
+			<h2 class="section-title">Port Operations Intelligence</h2>
+			<p class="section-subtitle">Real-time monitoring and AI-powered insights for maritime operations</p>
+		</div>
+		
+		<div class="metrics-grid">
+			{#each impactHighlights as highlight}
+				<div class="metric-card">
+					<h3 class="metric-value">{highlight.value}</h3>
+					<p class="metric-label">{highlight.label}</p>
+					<span class="metric-change">{highlight.subtext}</span>
+				</div>
+			{/each}
+		</div>
+	</div>
 </section>
 
-<main class="workspace">
-	<aside class="incident-list">
-		<header>
-			<h2>Live incidents</h2>
-			<p>Auto-prioritized by severity and operational impact.</p>
-		</header>
-		<ul>
-			{#each incidents as incident}
-				<li>
-					<button
-						type="button"
-						class:selected={incident.id === selectedIncident.id}
-						on:click={() => selectIncident(incident)}
-					>
-						<div class="id-row">
-							<span>{incident.displayId}</span>
-							<span class={`badge ${severityPalette[incident.severity] ?? 'medium'}`}
-								>{incident.severity}</span
-							>
+<!-- Technology Layers -->
+<section class="tech-section">
+	<div class="tech-content">
+		<div class="section-header">
+			<h2 class="section-title">AI-Powered Maritime Technology</h2>
+			<p class="section-subtitle">Three-layer architecture for comprehensive port management</p>
+		</div>
+		
+		<div class="tech-grid">
+			{#each layers as layer, index}
+				<div class="tech-card" style="animation-delay: {index * 0.2}s">
+					<div class="tech-badge">Layer 0{index + 1}</div>
+					<div class="layer-content">
+						<h3>{layer.title}</h3>
+						<p>{layer.description}</p>
+					</div>
+				</div>
+			{/each}
+		</div>
+	</div>
+</section>
+
+<!-- Live Incidents Dashboard -->
+<section class="incidents-section">
+	<div class="incidents-content">
+		<div class="section-header">
+			<h2 class="section-title">Live Incidents Dashboard</h2>
+			<p class="section-subtitle">Real-time incident monitoring and AI-powered assistance</p>
+		</div>
+		
+		<div class="dashboard-grid">
+			<div class="incident-sidebar">
+				<div class="panel-header">
+					<h3>Live Incidents</h3>
+					<span class="incident-count">{incidents.length} Active</span>
+				</div>
+				
+				<div class="incident-list-items">
+					{#each incidents.slice(0, 5) as incident}
+						<div class="incident-item">
+							<div class="incident-header">
+								<span class="incident-id">{incident.displayId}</span>
+								<span class="severity-badge {safeSeverity(incident.severity)}">{incident.severity}</span>
+							</div>
+							<h4 class="incident-title">{incident.title}</h4>
+							<p class="incident-summary">{incident.summary}</p>
+							<div class="incident-meta">
+								<span>🕐 {formatTimestamp(incident.occurredAt) || 'Just now'}</span>
+								<span>📍 {incident.channel || 'Port Authority'}</span>
+							</div>
 						</div>
-						<h3>{incident.title}</h3>
-						<p>{incident.summary}</p>
-					</button>
-				</li>
-			{/each}
-		</ul>
-	</aside>
-
-	<section class="incident-detail">
-		<header class="detail-header">
-			<div>
-				<h2>{selectedIncident.displayId}</h2>
-				<p>{selectedIncident.title}</p>
+					{/each}
+				</div>
+				
+				<a href="/incidents" class="view-all-btn">View All Incidents →</a>
 			</div>
-			<div class="detail-meta">
-				<span>{selectedIncident.channel}</span>
-				<span>{selectedIncident.persona}</span>
-				<span>{formatTimestamp(selectedIncident.occurredAt)}</span>
+			
+			<div class="incident-detail-panel">
+				<div class="panel-header">
+					<h3>Port Operations Overview</h3>
+					<div class="status-indicator online">System Online</div>
+				</div>
+				
+				<div class="operations-overview">
+					<div class="overview-grid">
+						<div class="overview-stat">
+							<h4>Active Vessels</h4>
+							<span class="overview-value">47</span>
+							<span class="overview-trend">+3 today</span>
+						</div>
+						<div class="overview-stat">
+							<h4>Cargo Throughput</h4>
+							<span class="overview-value">12.4K</span>
+							<span class="overview-trend">TEU today</span>
+						</div>
+						<div class="overview-stat">
+							<h4>System Health</h4>
+							<span class="overview-value">98.7%</span>
+							<span class="overview-trend">Uptime</span>
+						</div>
+						<div class="overview-stat">
+							<h4>Response Time</h4>
+							<span class="overview-value">&lt;2min</span>
+							<span class="overview-trend">Average</span>
+						</div>
+					</div>
+					
+					<div class="next-actions">
+						<h4>Quick Actions</h4>
+						<div class="action-grid">
+							<a href="/incidents" class="quick-action">Manage Incidents</a>
+							<a href="/archive" class="quick-action">View Archive</a>
+							<button class="quick-action">Generate Report</button>
+						</div>
+					</div>
+				</div>
 			</div>
-		</header>
-
-		{#if toast}
-			<div class="toast">{toast}</div>
-		{/if}
-
-		<div class="detail-grid">
-			<section class="panel">
-				<h3>Layer 1 · Unified Ingestion</h3>
-				<ul>
-					{#each selectedIncident.ingestion as item}
-						<li>
-							<span>{item.label}</span>
-							<strong>{item.value}</strong>
-						</li>
-					{/each}
-				</ul>
-			</section>
-			<section class="panel">
-				<h3>Layer 2 · Correlation Evidence</h3>
-				<ul>
-					{#each selectedIncident.correlatedEvidence as evidence}
-						<li>
-							<header>
-								<strong>{evidence.source}</strong>
-								<span>{formatTimestamp(evidence.timestamp)}</span>
-							</header>
-							<p>{evidence.message}</p>
-							{#if evidence.insight}
-								<small>{evidence.insight}</small>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-			</section>
-			<section class="panel knowledge">
-				<h3>Layer 2 · Knowledge Base hits</h3>
-				<ul>
-					{#each selectedIncident.knowledgeBase as article}
-						<li>
-							<strong>[{article.reference}] {article.title}</strong>
-							<p>{article.summary}</p>
-						</li>
-					{/each}
-				</ul>
-			</section>
 		</div>
+	</div>
+</section>
 
-		<section class="actions">
-			<h3>Layer 3 · Guided remediation</h3>
-			{#each selectedIncident.recommendedActions as action, index}
-				<article class="action-card">
-					<header>
-						<span class="step">Step {index + 1}</span>
-						<h4>{action.label}</h4>
-						<span class="cite">[{action.cite}]</span>
-					</header>
-					<p>{action.explanation}</p>
-					<pre>
-						<code class={`language-${syntaxMap[action.artifactType] ?? 'text'}`}>{action.artifact}</code>
-					</pre>
-				</article>
-			{/each}
-		</section>
-
-		<section class="co-pilot">
-			<h3>Gemini co-pilot output</h3>
-			<div class="buttons">
-				<button type="button" disabled={playbookLoading} on:click={() => requestGemini('playbook')}>
-					{playbookLoading ? 'Generating playbook…' : 'Generate playbook'}
-				</button>
-				<button
-					type="button"
-					disabled={escalationLoading}
-					on:click={() => requestGemini('escalation')}
-				>
-					{escalationLoading ? 'Drafting escalation…' : 'Draft escalation summary'}
-				</button>
-			</div>
-			<div class="generated">
-				<article>
-					<h4>Playbook draft</h4>
-					{#if playbookOutput}
-						<pre><code>{playbookOutput}</code></pre>
-					{:else}
-						<p class="placeholder">
-							Request a Gemini playbook to see an action plan for this incident.
-						</p>
-					{/if}
-				</article>
-				<article>
-					<h4>Escalation brief</h4>
-					{#if escalationOutput}
-						<pre><code>{escalationOutput}</code></pre>
-					{:else}
-						<p class="placeholder">
-							Draft a bridge-ready summary when leadership updates are required.
-						</p>
-					{/if}
-				</article>
-			</div>
-		</section>
-
-		<section class="escalation">
-			<h3>Escalation posture</h3>
-			<p>{selectedIncident.escalation.summary}</p>
-			{#if selectedIncident.escalation.required}
-				<ul>
-					<li><strong>Owner:</strong> {selectedIncident.escalation.owner}</li>
-					<li><strong>Team:</strong> {selectedIncident.escalation.team}</li>
-					<li><strong>Channel:</strong> {selectedIncident.escalation.channel}</li>
-					{#if selectedIncident.escalation.escalationNote}
-						<li><strong>Quick note:</strong> {selectedIncident.escalation.escalationNote}</li>
-					{/if}
-				</ul>
-			{/if}
-		</section>
-	</section>
-</main>
+{#if errorObj}
+	<div class="error-section">
+		<div class="container">
+			<ErrorViewer {errorObj} onRetry={() => (errorObj = null)} />
+		</div>
+	</div>
+{/if}
 
 <style>
 	:global(body) {
@@ -276,546 +277,856 @@
 			BlinkMacSystemFont,
 			'Segoe UI',
 			sans-serif;
-		background: #0f172a;
+		background: #0a0f1c;
 		color: #f8fafc;
+		overflow-x: hidden;
 	}
 
-	a {
-		color: inherit;
-		text-decoration: none;
+	:global(*) {
+		box-sizing: border-box;
 	}
 
-	.hero {
+	/* Hero Section with Parallax */
+	.hero-section {
+		position: relative;
+		height: 100vh;
 		display: flex;
-		justify-content: space-between;
-		align-items: flex-end;
-		margin: 2.5rem auto 1.5rem;
-		max-width: 1100px;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
 	}
 
-	.hero h1 {
-		margin: 0;
-		font-size: 2.75rem;
+	.hero-section::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: linear-gradient(
+			180deg, 
+			rgba(10, 15, 28, 0.2) 0%, 
+			rgba(10, 15, 28, 0.7) 50%,
+			rgba(10, 15, 28, 0.95) 100%
+		);
+		z-index: 2;
+	}
+
+	.hero-section::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: url('/images/wideangle.jpg') center/cover no-repeat;
+		transform: translateY(calc(var(--scroll-y, 0px) * 0.5));
+		will-change: transform;
+		z-index: 1;
+	}
+
+	.hero-content {
+		position: relative;
+		z-index: 3;
+		text-align: center;
+		max-width: 900px;
+		padding: 2rem;
+	}
+
+	.hero-content h1 {
+		font-size: 4rem;
+		font-weight: 800;
+		margin: 0 0 1rem;
+		background: linear-gradient(135deg, #60a5fa, #34d399, #fbbf24);
+		background-clip: text;
+		-webkit-background-clip: text;
+		color: transparent;
+		text-shadow: 0 0 40px rgba(96, 165, 250, 0.3);
 		letter-spacing: -0.02em;
 	}
 
-	.tagline {
-		margin: 0.4rem 0 0;
-		color: #94a3b8;
-		font-size: 1.1rem;
+	.hero-tagline {
+		font-size: 1.5rem;
+		color: #cbd5e1;
+		margin: 0 0 2rem;
+		font-weight: 300;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 	}
 
 	.hero-meta {
 		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-		align-items: flex-end;
-		color: #cbd5f5;
+		justify-content: center;
+		gap: 2rem;
+		margin-top: 3rem;
+		flex-wrap: wrap;
 	}
 
-	.hero-meta .label {
-		padding: 0.25rem 0.75rem;
-		border: 1px solid rgba(148, 163, 184, 0.4);
-		border-radius: 999px;
-		font-size: 0.75rem;
+	.hero-stat {
+		text-align: center;
+		padding: 1rem 2rem;
+		background: rgba(30, 41, 59, 0.4);
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		border-radius: 1rem;
+		backdrop-filter: blur(10px);
+	}
+
+	.hero-stat-value {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #60a5fa;
+		display: block;
+	}
+
+	.hero-stat-label {
+		font-size: 0.9rem;
+		color: #94a3b8;
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 	}
 
-	.hero-meta .meta {
-		font-size: 0.85rem;
-		color: #94a3b8;
+	/* Operations Overview */
+	.operations-section {
+		padding: 6rem 2rem;
+		background: linear-gradient(180deg, #0a0f1c 0%, #1e293b 100%);
+		position: relative;
 	}
 
-	.metrics {
+	.operations-section::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 200px;
+		opacity: 0.1;
+		z-index: 1;
+	}
+
+	.operations-content {
+		position: relative;
+		z-index: 2;
+		max-width: 1200px;
+		margin: 0 auto;
+	}
+
+	.section-header {
+		text-align: center;
+		margin-bottom: 4rem;
+	}
+
+	.section-title {
+		font-size: 3rem;
+		font-weight: 700;
+		color: #f8fafc;
+		margin: 0 0 1rem;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	}
+
+	.section-subtitle {
+		font-size: 1.2rem;
+		color: #94a3b8;
+		margin: 0;
+		max-width: 600px;
+		margin: 0 auto;
+		line-height: 1.6;
+	}
+
+	.metrics-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 1rem;
-		margin: 0 auto 2rem;
-		max-width: 1100px;
+		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		gap: 2rem;
+		margin-bottom: 4rem;
 	}
 
 	.metric-card {
-		padding: 1.5rem;
-		border-radius: 1rem;
-		background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.9));
-		border: 1px solid rgba(148, 163, 184, 0.15);
-		box-shadow: 0 20px 40px -20px rgba(15, 23, 42, 0.75);
-	}
-
-	.metric-card h3 {
-		margin: 0 0 0.4rem;
-		font-size: 1.75rem;
-	}
-
-	.metric-card p {
-		margin: 0;
-		color: #cbd5f5;
-		font-weight: 500;
-	}
-
-	.metric-card span {
-		display: block;
-		margin-top: 0.35rem;
-		color: #94a3b8;
-		font-size: 0.85rem;
-	}
-
-	.layers {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-		gap: 1.25rem;
-		margin: 0 auto 2.5rem;
-		max-width: 1100px;
-	}
-
-	.layer-card {
-		padding: 1.75rem;
-		border-radius: 1.25rem;
-		background: rgba(15, 23, 42, 0.7);
+		padding: 2rem;
+		border-radius: 1.5rem;
+		background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
 		border: 1px solid rgba(148, 163, 184, 0.2);
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+		backdrop-filter: blur(10px);
+		transition: transform 0.3s ease, box-shadow 0.3s ease;
 		position: relative;
 		overflow: hidden;
 	}
 
-	.layer-card::after {
+	.metric-card::before {
 		content: '';
 		position: absolute;
-		width: 120px;
-		height: 120px;
-		right: -40px;
-		bottom: -40px;
-		background: radial-gradient(circle at center, rgba(59, 130, 246, 0.35), transparent);
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 4px;
+		background: linear-gradient(90deg, #60a5fa, #34d399);
 	}
 
-	.layer-kicker {
-		display: inline-block;
-		margin-bottom: 0.6rem;
-		font-size: 0.75rem;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
+	.metric-card:hover {
+		transform: translateY(-5px);
+		box-shadow: 0 35px 70px -12px rgba(0, 0, 0, 0.35);
+	}
+
+	.metric-value {
+		font-size: 2.5rem;
+		font-weight: 800;
 		color: #60a5fa;
+		margin: 0 0 0.5rem;
+		text-shadow: 0 2px 10px rgba(96, 165, 250, 0.3);
 	}
 
-	.layer-card h2 {
-		margin: 0 0 0.6rem;
-		font-size: 1.35rem;
-	}
-
-	.layer-card p {
-		margin: 0;
-		color: #cbd5f5;
-		line-height: 1.5;
-	}
-
-	.workspace {
-		display: grid;
-		grid-template-columns: 320px 1fr;
-		gap: 1.5rem;
-		margin: 0 auto 4rem;
-		max-width: 1100px;
-	}
-
-	.incident-list {
-		background: rgba(15, 23, 42, 0.65);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		border-radius: 1.25rem;
-		padding: 1.5rem;
-		position: sticky;
-		top: 1.5rem;
-		height: fit-content;
-	}
-
-	.incident-list header h2 {
-		margin: 0;
+	.metric-label {
 		font-size: 1.1rem;
+		color: #e2e8f0;
+		margin: 0 0 0.5rem;
+		font-weight: 500;
 	}
 
-	.incident-list header p {
-		margin: 0.35rem 0 1rem;
-		color: #94a3b8;
+	.metric-change {
 		font-size: 0.9rem;
-	}
-
-	.incident-list ul {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.incident-list button {
-		width: 100%;
-		text-align: left;
-		padding: 1rem;
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		border-radius: 1rem;
-		background: rgba(15, 23, 42, 0.55);
-		color: inherit;
-		cursor: pointer;
-		transition:
-			border 0.2s ease,
-			transform 0.2s ease;
-		font: inherit;
-	}
-
-	.incident-list button:hover {
-		transform: translateY(-2px);
-		border-color: rgba(99, 102, 241, 0.6);
-	}
-
-	.incident-list button.selected {
-		border-color: rgba(59, 130, 246, 0.8);
-		background: rgba(37, 99, 235, 0.25);
-	}
-
-	.incident-list button h3 {
-		margin: 0.35rem 0;
-		font-size: 1rem;
-	}
-
-	.incident-list button p {
-		margin: 0;
-		color: #94a3b8;
-		font-size: 0.85rem;
-	}
-
-	.id-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		font-size: 0.85rem;
-		color: #cbd5f5;
-	}
-
-	.badge {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.1rem 0.55rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
+		color: #34d399;
 		font-weight: 600;
 	}
 
-	.badge.critical {
-		background: rgba(239, 68, 68, 0.2);
-		color: #fca5a5;
+	/* Technology Layers */
+	.tech-section {
+		padding: 6rem 2rem;
+		background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+		position: relative;
 	}
 
-	.badge.high {
-		background: rgba(249, 115, 22, 0.2);
-		color: #fb923c;
+	.tech-section::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: 0;
+		width: 50%;
+		height: 100%;
+		opacity: 0.08;
+		z-index: 1;
 	}
 
-	.badge.medium {
-		background: rgba(250, 204, 21, 0.15);
-		color: #fcd34d;
+	.tech-content {
+		position: relative;
+		z-index: 2;
+		max-width: 1200px;
+		margin: 0 auto;
 	}
 
-	.badge.low {
-		background: rgba(34, 197, 94, 0.2);
-		color: #86efac;
+	.tech-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+		gap: 2.5rem;
 	}
 
-	.incident-detail {
+	.tech-card {
+		padding: 2.5rem;
+		border-radius: 2rem;
+		background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.6));
+		border: 1px solid rgba(148, 163, 184, 0.15);
+		position: relative;
+		overflow: hidden;
+		transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	.tech-card::after {
+		content: '';
+		position: absolute;
+		width: 150px;
+		height: 150px;
+		right: -50px;
+		bottom: -50px;
+		background: radial-gradient(circle at center, rgba(96, 165, 250, 0.15), transparent);
+		transition: all 0.4s ease;
+	}
+
+	.tech-card:hover::after {
+		transform: scale(1.5);
+		opacity: 0.8;
+	}
+
+	.tech-card:hover {
+		transform: translateY(-8px) scale(1.02);
+		border-color: rgba(96, 165, 250, 0.4);
+		box-shadow: 0 40px 80px -20px rgba(96, 165, 250, 0.2);
+	}
+
+	.tech-badge {
+		display: inline-block;
+		padding: 0.5rem 1rem;
+		background: linear-gradient(135deg, #60a5fa, #3b82f6);
+		color: white;
+		border-radius: 2rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		margin-bottom: 1.5rem;
+	}
+
+	/* Live Incidents Dashboard */
+	.incidents-section {
+		padding: 6rem 2rem;
+		background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+		position: relative;
+	}
+
+	.incidents-section::before {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 300px;
+		background: url('/images/tuasport.jpg') center/cover no-repeat;
+		opacity: 0.1;
+		z-index: 1;
+	}
+
+	.incidents-content {
+		position: relative;
+		z-index: 2;
+		max-width: 1400px;
+		margin: 0 auto;
+	}
+
+	.dashboard-grid {
+		display: grid;
+		grid-template-columns: 400px 1fr;
+		gap: 3rem;
+		margin-top: 3rem;
+	}
+
+	.incident-sidebar {
+		background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7));
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		border-radius: 2rem;
+		padding: 2rem;
+		backdrop-filter: blur(10px);
+		position: sticky;
+		top: 2rem;
+		height: fit-content;
+		max-height: 80vh;
+		overflow-y: auto;
+	}
+
+	.incident-list-items {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 1rem;
+	}
+
+	.incident-item {
+		width: 100%;
+		text-align: left;
+		padding: 1.5rem;
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		border-radius: 1.5rem;
+		background: linear-gradient(145deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.4));
+		color: inherit;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		font: inherit;
+	}
+
+	.incident-item:hover {
+		transform: translateY(-3px);
+		border-color: rgba(96, 165, 250, 0.6);
+		box-shadow: 0 20px 40px -15px rgba(96, 165, 250, 0.2);
+	}
+
+	.incident-item.selected {
+		border-color: rgba(96, 165, 250, 0.8);
+		background: linear-gradient(145deg, rgba(37, 99, 235, 0.2), rgba(59, 130, 246, 0.1));
+		box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.3);
+	}
+
+	.incident-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin-bottom: 0.75rem;
+	}
+
+	.incident-id {
+		font-size: 0.85rem;
+		color: #94a3b8;
+		font-family: 'JetBrains Mono', monospace;
+	}
+
+	.severity-badge {
+		padding: 0.3rem 0.8rem;
+		border-radius: 1rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.severity-badge.critical {
+		background: linear-gradient(135deg, #dc2626, #b91c1c);
+		color: white;
+		box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+	}
+
+	.severity-badge.high {
+		background: linear-gradient(135deg, #ea580c, #c2410c);
+		color: white;
+		box-shadow: 0 4px 15px rgba(234, 88, 12, 0.3);
+	}
+
+	.severity-badge.medium {
+		background: linear-gradient(135deg, #ca8a04, #a16207);
+		color: white;
+		box-shadow: 0 4px 15px rgba(202, 138, 4, 0.3);
+	}
+
+	.severity-badge.low {
+		background: linear-gradient(135deg, #16a34a, #15803d);
+		color: white;
+		box-shadow: 0 4px 15px rgba(22, 163, 74, 0.3);
+	}
+
+	.incident-title {
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: #f8fafc;
+		margin: 0 0 0.5rem;
+	}
+
+	.incident-summary {
+		font-size: 0.9rem;
+		color: #cbd5e1;
+		margin: 0;
+		line-height: 1.4;
+	}
+
+	.incident-detail-panel {
+		background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7));
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		border-radius: 2rem;
+		padding: 2.5rem;
+		backdrop-filter: blur(10px);
+	}
+
+	.detail-content {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
 	}
 
 	.detail-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: flex-end;
-		background: rgba(15, 23, 42, 0.7);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		border-radius: 1.25rem;
-		padding: 1.5rem;
+		align-items: flex-start;
+		padding-bottom: 2rem;
+		border-bottom: 1px solid rgba(148, 163, 184, 0.2);
 	}
 
-	.detail-header h2 {
+	.detail-title {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #f8fafc;
+		margin: 0 0 0.5rem;
+	}
+
+	.detail-description {
+		color: #cbd5e1;
 		margin: 0;
-		font-size: 1.6rem;
-	}
-
-	.detail-header p {
-		margin: 0.4rem 0 0;
-		color: #cbd5f5;
+		font-size: 1.1rem;
+		line-height: 1.6;
 	}
 
 	.detail-meta {
 		display: flex;
-		gap: 0.75rem;
+		gap: 1.5rem;
+		flex-wrap: wrap;
 		font-size: 0.9rem;
 		color: #94a3b8;
 	}
 
-	.toast {
-		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		background: rgba(239, 68, 68, 0.15);
-		border: 1px solid rgba(248, 113, 113, 0.3);
-		color: #fecaca;
-		font-size: 0.9rem;
-	}
-
-	.detail-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-		gap: 1.25rem;
-	}
-
-	.panel {
-		padding: 1.25rem;
-		border-radius: 1.15rem;
-		background: rgba(15, 23, 42, 0.65);
-		border: 1px solid rgba(148, 163, 184, 0.18);
-		min-height: 220px;
-	}
-
-	.panel h3 {
-		margin: 0 0 0.9rem;
-		font-size: 1rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: #60a5fa;
-	}
-
-	.panel ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.panel li {
-		border-left: 2px solid rgba(59, 130, 246, 0.4);
-		padding-left: 0.75rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		color: #cbd5f5;
-	}
-
-	.panel li span {
-		color: #94a3b8;
-		font-size: 0.85rem;
-	}
-
-	.panel li small {
-		color: #94a3b8;
-		font-size: 0.8rem;
-	}
-
-	.panel.knowledge li {
-		border-left-color: rgba(16, 185, 129, 0.5);
-	}
-
-	.actions {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.actions h3 {
-		margin: 0;
-		font-size: 1.1rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: #34d399;
-	}
-
-	.action-card {
-		padding: 1.25rem;
-		border-radius: 1.1rem;
-		background: rgba(15, 23, 42, 0.65);
-		border: 1px solid rgba(148, 163, 184, 0.18);
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.action-card header {
+	.meta-item {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
 	}
 
-	.action-card .step {
-		padding: 0.2rem 0.6rem;
-		border-radius: 999px;
-		background: rgba(59, 130, 246, 0.2);
-		color: #bfdbfe;
-		font-size: 0.75rem;
-		text-transform: uppercase;
+	.status-indicator {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: #34d399;
+		animation: pulse 2s infinite;
 	}
 
-	.action-card h4 {
-		margin: 0;
-		font-size: 1.05rem;
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
 	}
 
-	.action-card .cite {
-		margin-left: auto;
-		color: #94a3b8;
-		font-size: 0.85rem;
-	}
-
-	.action-card pre {
-		margin: 0;
-		padding: 0.75rem;
-		border-radius: 0.85rem;
-		background: rgba(15, 23, 42, 0.9);
-		border: 1px solid rgba(148, 163, 184, 0.25);
-		color: #e2e8f0;
-		font-size: 0.85rem;
-		white-space: pre-wrap;
-		word-break: break-word;
-	}
-
-	.co-pilot {
-		padding: 1.5rem;
-		border-radius: 1.25rem;
-		background: rgba(15, 23, 42, 0.7);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.co-pilot h3 {
-		margin: 0;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: #93c5fd;
-	}
-
-	.buttons {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.buttons button {
-		padding: 0.65rem 1.2rem;
-		border-radius: 0.85rem;
-		border: none;
-		background: linear-gradient(135deg, #2563eb, #3b82f6);
-		color: white;
-		font-weight: 600;
-		cursor: pointer;
-		transition:
-			transform 0.2s ease,
-			box-shadow 0.2s ease;
-	}
-
-	.buttons button[disabled] {
-		opacity: 0.6;
-		cursor: progress;
-		transform: none;
-		box-shadow: none;
-	}
-
-	.buttons button:not([disabled]):hover {
-		transform: translateY(-1px);
-		box-shadow: 0 12px 24px -18px rgba(59, 130, 246, 0.8);
-	}
-
-	.generated {
+	.detail-sections {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+		gap: 2rem;
 	}
 
-	.generated article {
-		padding: 1rem;
-		border-radius: 1rem;
-		background: rgba(30, 41, 59, 0.7);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
+	.detail-section {
+		padding: 2rem;
+		border-radius: 1.5rem;
+		background: linear-gradient(145deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.4));
+		border: 1px solid rgba(148, 163, 184, 0.15);
 	}
 
-	.generated h4 {
-		margin: 0;
+	.section-title-small {
 		font-size: 1rem;
-	}
-
-	.generated pre {
-		margin: 0;
-		padding: 0.75rem;
-		background: rgba(15, 23, 42, 0.85);
-		border-radius: 0.75rem;
-		border: 1px solid rgba(148, 163, 184, 0.25);
-		color: #f8fafc;
-		font-size: 0.85rem;
-		white-space: pre-wrap;
-		word-break: break-word;
-	}
-
-	.placeholder {
-		margin: 0;
-		color: #64748b;
-		font-size: 0.85rem;
-	}
-
-	.escalation {
-		padding: 1.25rem;
-		border-radius: 1.1rem;
-		background: rgba(15, 23, 42, 0.65);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		margin-bottom: 2rem;
-	}
-
-	.escalation h3 {
-		margin: 0 0 0.75rem;
+		font-weight: 600;
+		color: #60a5fa;
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: #f9a8d4;
+		letter-spacing: 0.1em;
+		margin: 0 0 1.5rem;
 	}
 
-	.escalation p {
-		margin: 0 0 0.6rem;
-		color: #cbd5f5;
+	/* Responsive Design */
+	@media (max-width: 1200px) {
+		.dashboard-grid {
+			grid-template-columns: 1fr;
+			gap: 2rem;
+		}
+
+		.incident-sidebar {
+			position: static;
+			max-height: 400px;
+		}
 	}
 
-	.escalation ul {
-		margin: 0;
-		padding-left: 1rem;
-		color: #94a3b8;
-		font-size: 0.9rem;
-		line-height: 1.6;
-	}
+	@media (max-width: 768px) {
+		.hero-content h1 {
+			font-size: 2.5rem;
+		}
 
-	@media (max-width: 960px) {
-		.hero {
+		.hero-tagline {
+			font-size: 1.2rem;
+		}
+
+		.hero-meta {
 			flex-direction: column;
-			align-items: flex-start;
 			gap: 1rem;
 		}
 
-		.workspace {
+		.section-title {
+			font-size: 2rem;
+		}
+
+		.metrics-grid,
+		.tech-grid {
 			grid-template-columns: 1fr;
 		}
 
-		.incident-list {
-			position: static;
+		.tech-card,
+		.metric-card {
+			padding: 1.5rem;
 		}
 
-		.detail-header {
+		.detail-sections {
+			grid-template-columns: 1fr;
+		}
+
+		.panel-header {
 			flex-direction: column;
-			gap: 0.75rem;
 			align-items: flex-start;
+			gap: 0.75rem;
 		}
+		
+		.panel-header h3 {
+			font-size: 1.1rem;
+		}
+		
+		.status-indicator.online {
+			align-self: flex-end;
+		}
+		
+		.overview-grid {
+			grid-template-columns: 1fr;
+		}
+	}
 
-		.detail-meta {
-			flex-wrap: wrap;
+	/* Scrollbar Styling */
+	.incident-sidebar::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.incident-sidebar::-webkit-scrollbar-track {
+		background: rgba(148, 163, 184, 0.1);
+		border-radius: 3px;
+	}
+
+	.incident-sidebar::-webkit-scrollbar-thumb {
+		background: rgba(96, 165, 250, 0.5);
+		border-radius: 3px;
+	}
+
+	.incident-sidebar::-webkit-scrollbar-thumb:hover {
+		background: rgba(96, 165, 250, 0.7);
+	}
+
+	/* Additional Styles for New Elements */
+	.view-all-btn {
+		display: inline-block;
+		padding: 0.75rem 1.5rem;
+		background: linear-gradient(135deg, #60a5fa, #3b82f6);
+		color: white;
+		text-decoration: none;
+		border-radius: 0.75rem;
+		font-weight: 600;
+		text-align: center;
+		margin-top: 1.5rem;
+		transition: all 0.3s ease;
+	}
+
+	.view-all-btn:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 20px 40px -15px rgba(59, 130, 246, 0.4);
+	}
+
+	.panel-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1.5rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+		gap: 1rem; /* Add gap to prevent overlap */
+	}
+
+	.panel-header h3 {
+		font-size: 1.2rem;
+		font-weight: 600;
+		color: #f8fafc;
+		margin: 0;
+		flex: 1; /* Allow title to take available space */
+		min-width: 0; /* Allow title to shrink if needed */
+	}
+
+	.incident-count {
+		background: rgba(59, 130, 246, 0.2);
+		color: #bfdbfe;
+		padding: 0.25rem 0.75rem;
+		border-radius: 1rem;
+		font-size: 0.85rem;
+		font-weight: 500;
+	}
+
+	.ai-status.online {
+		background: rgba(34, 197, 94, 0.2);
+		color: #86efac;
+		padding: 0.25rem 0.75rem;
+		border-radius: 1rem;
+		font-size: 0.85rem;
+		font-weight: 500;
+	}
+
+	.status-indicator.online {
+		background: rgba(34, 197, 94, 0.2);
+		color: #86efac;
+		padding: 0.25rem 0.75rem;
+		border-radius: 1rem;
+		font-size: 0.85rem;
+		font-weight: 500;
+		white-space: nowrap; /* Prevent text wrapping */
+		flex-shrink: 0; /* Prevent shrinking */
+	}
+
+	.operations-overview {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+	}
+
+	.overview-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1rem;
+	}
+
+	.overview-stat {
+		text-align: center;
+		padding: 1rem;
+		background: rgba(30, 41, 59, 0.6);
+		border-radius: 1rem;
+		border: 1px solid rgba(148, 163, 184, 0.2);
+	}
+
+	.overview-stat h4 {
+		font-size: 0.9rem;
+		color: #94a3b8;
+		margin: 0 0 0.5rem;
+		font-weight: 500;
+	}
+
+	.overview-value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: #60a5fa;
+		display: block;
+		margin-bottom: 0.25rem;
+	}
+
+	.overview-trend {
+		font-size: 0.8rem;
+		color: #34d399;
+		font-weight: 500;
+	}
+
+	.next-actions h4 {
+		color: #f8fafc;
+		margin: 0 0 1rem;
+		font-size: 1rem;
+	}
+
+	.action-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.75rem;
+	}
+
+	.quick-action {
+		padding: 0.75rem 1rem;
+		background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
+		border: 1px solid rgba(148, 163, 184, 0.3);
+		color: #cbd5e1;
+		border-radius: 0.75rem;
+		text-decoration: none;
+		transition: all 0.3s ease;
+		font-weight: 500;
+		text-align: center;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+
+	.quick-action:hover {
+		background: linear-gradient(135deg, #60a5fa, #3b82f6);
+		color: white;
+		transform: translateY(-2px);
+		box-shadow: 0 10px 25px -10px rgba(59, 130, 246, 0.4);
+	}
+
+	.ai-content {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+	}
+
+	.gemini-interface {
+		display: flex;
+		gap: 1rem;
+		align-items: flex-start;
+	}
+
+	.ai-avatar {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #60a5fa, #3b82f6);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.2rem;
+		flex-shrink: 0;
+	}
+
+	.quick-actions {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.action-btn {
+		padding: 0.75rem 1.5rem;
+		background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
+		border: 1px solid rgba(148, 163, 184, 0.3);
+		color: #cbd5e1;
+		border-radius: 0.75rem;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		font-weight: 500;
+	}
+
+	.action-btn:hover {
+		background: linear-gradient(135deg, #60a5fa, #3b82f6);
+		color: white;
+		transform: translateY(-2px);
+		box-shadow: 0 10px 25px -10px rgba(59, 130, 246, 0.4);
+	}
+
+	.container {
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 0 2rem;
+	}
+
+	.scroll-indicator {
+		position: absolute;
+		bottom: 2rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 3;
+	}
+
+	.scroll-arrow {
+		width: 24px;
+		height: 24px;
+		border-right: 2px solid #60a5fa;
+		border-bottom: 2px solid #60a5fa;
+		transform: rotate(45deg);
+		animation: bounce 2s infinite;
+	}
+
+	@keyframes bounce {
+		0%, 20%, 50%, 80%, 100% {
+			transform: translateX(-50%) rotate(45deg) translateY(0);
 		}
+		40% {
+			transform: translateX(-50%) rotate(45deg) translateY(-10px);
+		}
+		60% {
+			transform: translateX(-50%) rotate(45deg) translateY(-5px);
+		}
+	}
+
+	.hero-stats {
+		display: flex;
+		justify-content: center;
+		gap: 2rem;
+		margin-top: 3rem;
+		flex-wrap: wrap;
+	}
+
+	.stat {
+		text-align: center;
+		padding: 1rem 2rem;
+		background: rgba(30, 41, 59, 0.4);
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		border-radius: 1rem;
+		backdrop-filter: blur(10px);
+	}
+
+	.stat-number {
+		font-size: 2rem;
+		font-weight: 700;
+		color: #60a5fa;
+		display: block;
+	}
+
+	.stat-label {
+		font-size: 0.9rem;
+		color: #94a3b8;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+	}
+
+	.tagline {
+		font-size: 1.5rem;
+		color: #cbd5e1;
+		margin: 0 0 2rem;
+		font-weight: 300;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 	}
 </style>

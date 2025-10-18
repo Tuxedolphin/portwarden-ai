@@ -1,8 +1,7 @@
-<script >
+<script>
 	import { enhance } from '$app/forms';
-	
 	let { form } = $props();
-<\/script>
+</script>
 
 <h1>Login/Register</h1>
 <form method="post" action="?/login" use:enhance>

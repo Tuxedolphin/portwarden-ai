@@ -16,8 +16,8 @@ export const load = async (event) => {
 export const actions = {
 	login: async (event) => {
 		const formData = await event.request.formData();
-		const username = formData.get('username');
-		const password = formData.get('password');
+	const username = String(formData.get('username') ?? '');
+	const password = String(formData.get('password') ?? '');
 
 		if (!validateUsername(username)) {
 			return fail(400, {
@@ -28,14 +28,14 @@ export const actions = {
 			return fail(400, { message: 'Invalid password (min 6, max 255 characters)' });
 		}
 
-		const results = await db.select().from(table.user).where(eq(table.user.username, username));
+	const results = await db.select().from(table.users).where(eq(table.users.email, username));
 
 		const existingUser = results.at(0);
 		if (!existingUser) {
 			return fail(400, { message: 'Incorrect username or password' });
 		}
 
-		const validPassword = await verify(existingUser.passwordHash, password, {
+	const validPassword = await verify(existingUser.passwordHash, String(password), {
 			memoryCost: 19456,
 			timeCost: 2,
 			outputLen: 32,
@@ -45,16 +45,15 @@ export const actions = {
 			return fail(400, { message: 'Incorrect username or password' });
 		}
 
-		const sessionToken = auth.generateSessionToken();
-		const session = await auth.createSession(sessionToken, existingUser.id);
-		auth.setSessionTokenCookie(event, sessionToken, session.expiresAt);
+	const session = await auth.createSession(existingUser.id);
+	auth.setSessionCookie(event, session);
 
 		return redirect(302, '/demo/lucia');
 	},
 	register: async (event) => {
 		const formData = await event.request.formData();
-		const username = formData.get('username');
-		const password = formData.get('password');
+		const username = String(formData.get('username') || '');
+		const password = String(formData.get('password') || '');
 
 		if (!validateUsername(username)) {
 			return fail(400, { message: 'Invalid username' });
@@ -63,8 +62,7 @@ export const actions = {
 			return fail(400, { message: 'Invalid password' });
 		}
 
-		const userId = generateUserId();
-		const passwordHash = await hash(password, {
+	const passwordHash = await hash(String(password), {
 			// recommended minimum parameters
 			memoryCost: 19456,
 			timeCost: 2,
@@ -73,11 +71,11 @@ export const actions = {
 		});
 
 		try {
-			await db.insert(table.user).values({ id: userId, username, passwordHash });
+			await db.insert(table.users).values({ email: String(username), name: 'Demo', passwordHash });
 
-			const sessionToken = auth.generateSessionToken();
-			const session = await auth.createSession(sessionToken, userId);
-			auth.setSessionTokenCookie(event, sessionToken, session.expiresAt);
+			const [created] = await db.select().from(table.users).where(eq(table.users.email, String(username)));
+			const session = await auth.createSession(created.id);
+			auth.setSessionCookie(event, session);
 		} catch {
 			return fail(500, { message: 'An error has occurred' });
 		}
@@ -92,6 +90,7 @@ function generateUserId() {
 	return id;
 }
 
+/** @param {string} username */
 function validateUsername(username) {
 	return (
 		typeof username === 'string' &&
@@ -101,6 +100,7 @@ function validateUsername(username) {
 	);
 }
 
+/** @param {string} password */
 function validatePassword(password) {
 	return typeof password === 'string' && password.length >= 6 && password.length <= 255;
 }

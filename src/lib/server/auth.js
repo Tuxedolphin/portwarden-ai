@@ -1,90 +1,149 @@
-import { eq } from 'drizzle-orm';
-import { sha256 } from '@oslojs/crypto/sha2';
-import { encodeBase64url, encodeHexLowerCase } from '@oslojs/encoding';
-import { db } from '$lib/server/db';
-import * as table from '$lib/server/db/schema';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { redirect, error as kitError } from '@sveltejs/kit';
+import { verify as argonVerify, hash as argonHash } from '@node-rs/argon2';
 
-const DAY_IN_MS = 1000 * 60 * 60 * 24;
+// Simple file-based auth (no database required)
+export const sessionCookieName = 'sid';
+const SESSION_DAYS = 7;
+const DATA_DIR = '.auth-data';
+const USERS_FILE = join(DATA_DIR, 'users.json');
+const SESSIONS_FILE = join(DATA_DIR, 'sessions.json');
 
-export const sessionCookieName = 'auth-session';
-
-export function generateSessionToken() {
-	const bytes = crypto.getRandomValues(new Uint8Array(18));
-	const token = encodeBase64url(bytes);
-	return token;
+// Ensure data directory exists
+if (!existsSync(DATA_DIR)) {
+	mkdirSync(DATA_DIR, { recursive: true });
 }
 
-/**
- * @param {string} token
- * @param {string} userId
- */
-export async function createSession(token, userId) {
-	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-	const session = {
-		id: sessionId,
-		userId,
-		expiresAt: new Date(Date.now() + DAY_IN_MS * 30)
+// Helper to read JSON files safely
+/** @param {string} path @param {any} defaultValue */
+function readJsonFile(path, defaultValue = {}) {
+	try {
+		if (!existsSync(path)) return defaultValue;
+		return JSON.parse(readFileSync(path, 'utf8'));
+	} catch {
+		return defaultValue;
+	}
+}
+
+// Helper to write JSON files
+/** @param {string} path @param {any} data */
+function writeJsonFile(path, data) {
+	writeFileSync(path, JSON.stringify(data, null, 2));
+}
+
+/** Hash a password using argon2id */
+/** @param {string} password */
+export async function hashPassword(password) {
+	return argonHash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
+}
+
+/** Verify an argon2id hash */
+/** @param {string} hash @param {string} password */
+export async function verifyPassword(hash, password) {
+	return argonVerify(hash, password);
+}
+
+/** Create a new session and return cookie value */
+/** @param {number} userId */
+export async function createSession(userId) {
+	const id = crypto.randomUUID();
+	const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+	
+	const sessions = readJsonFile(SESSIONS_FILE, {});
+	sessions[id] = { id, userId, expiresAt: expiresAt.toISOString() };
+	writeJsonFile(SESSIONS_FILE, sessions);
+	
+	return { id, expiresAt };
+}
+
+/** Validate session cookie value -> user */
+/** @param {string} sessionId */
+export async function validateSession(sessionId) {
+	if (!sessionId) return { user: null, session: null };
+	
+	const sessions = readJsonFile(SESSIONS_FILE, {});
+	const session = sessions[sessionId];
+	if (!session) return { user: null, session: null };
+	
+	if (Date.now() >= new Date(session.expiresAt).getTime()) {
+		delete sessions[sessionId];
+		writeJsonFile(SESSIONS_FILE, sessions);
+		return { user: null, session: null };
+	}
+	
+	const users = readJsonFile(USERS_FILE, {});
+	const user = users[session.userId];
+	if (!user) return { user: null, session: null };
+	
+	return { 
+		user: { id: user.id, email: user.email, name: user.name }, 
+		session: { id: session.id, expiresAt: new Date(session.expiresAt) }
 	};
-	await db.insert(table.session).values(session);
-	return session;
 }
 
-/** @param {string} token */
-export async function validateSessionToken(token) {
-	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-	const [result] = await db
-		.select({
-			// Adjust user table here to tweak returned data
-			user: { id: table.user.id, username: table.user.username },
-			session: table.session
-		})
-		.from(table.session)
-		.innerJoin(table.user, eq(table.session.userId, table.user.id))
-		.where(eq(table.session.id, sessionId));
-
-	if (!result) {
-		return { session: null, user: null };
-	}
-	const { session, user } = result;
-
-	const sessionExpired = Date.now() >= session.expiresAt.getTime();
-	if (sessionExpired) {
-		await db.delete(table.session).where(eq(table.session.id, session.id));
-		return { session: null, user: null };
-	}
-
-	const renewSession = Date.now() >= session.expiresAt.getTime() - DAY_IN_MS * 15;
-	if (renewSession) {
-		session.expiresAt = new Date(Date.now() + DAY_IN_MS * 30);
-		await db
-			.update(table.session)
-			.set({ expiresAt: session.expiresAt })
-			.where(eq(table.session.id, session.id));
-	}
-
-	return { session, user };
-}
-
+/** Invalidate a session */
 /** @param {string} sessionId */
 export async function invalidateSession(sessionId) {
-	await db.delete(table.session).where(eq(table.session.id, sessionId));
+	const sessions = readJsonFile(SESSIONS_FILE, {});
+	delete sessions[sessionId];
+	writeJsonFile(SESSIONS_FILE, sessions);
 }
 
-/**
- * @param {import("@sveltejs/kit").RequestEvent} event
- * @param {string} token
- * @param {Date} expiresAt
- */
-export function setSessionTokenCookie(event, token, expiresAt) {
-	event.cookies.set(sessionCookieName, token, {
-		expires: expiresAt,
-		path: '/'
+/** Set cookie */
+/** @param {import('@sveltejs/kit').RequestEvent} event @param {{ id: string, expiresAt: Date }} session */
+export function setSessionCookie(event, session) {
+	event.cookies.set(sessionCookieName, session.id, {
+		httpOnly: true,
+		sameSite: 'strict',
+		path: '/',
+		expires: session.expiresAt,
+		secure: event.url.protocol === 'https:'
 	});
 }
 
-/** @param {import("@sveltejs/kit").RequestEvent} event */
-export function deleteSessionTokenCookie(event) {
-	event.cookies.delete(sessionCookieName, {
-		path: '/'
-	});
+/** Delete cookie */
+/** @param {import('@sveltejs/kit').RequestEvent} event */
+export function clearSessionCookie(event) {
+	event.cookies.delete(sessionCookieName, { path: '/' });
+}
+
+/** Require user server-side. If not logged in, redirect to /login for pages or return 401 for endpoints */
+/** @param {import('@sveltejs/kit').RequestEvent} event @param {{ redirectTo?: string }} opts */
+export async function requireUser(event, opts = { redirectTo: '/login' }) {
+	const sid = event.cookies.get(sessionCookieName) || '';
+	const { user } = await validateSession(sid);
+	if (!user) {
+		if (event.route && String(event.route.id || '').endsWith('+page.server')) {
+			throw redirect(302, opts?.redirectTo || '/login');
+		}
+		throw kitError(401, 'Unauthorized');
+	}
+	return user;
+}
+
+/** Look up user by email */
+/** @param {string} email */
+export async function findUserByEmail(email) {
+	const users = readJsonFile(USERS_FILE, {});
+	return Object.values(users).find(user => user.email === email) || null;
+}
+
+/** Create user */
+/** @param {{ email: string, name: string, password: string }} input */
+export async function createUser({ email, name, password }) {
+	const users = readJsonFile(USERS_FILE, {});
+	const id = Date.now(); // Simple ID generation
+	const passwordHash = await hashPassword(password);
+	
+	users[id] = {
+		id,
+		email,
+		name,
+		passwordHash,
+		createdAt: new Date().toISOString()
+	};
+	
+	writeJsonFile(USERS_FILE, users);
+	return { id, email, name };
 }
