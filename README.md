@@ -24,7 +24,7 @@ npm run dev -- --open
 Environment variables:
 
 - `GEMINI_API_KEY` (required) – key from Google AI Studio (Gemini 1.5 models)
-- `GEMINI_MODEL` (optional) – override model name, defaults to `gemini-1.5-flash`
+- `GEMINI_MODEL` (optional) – override model name, defaults to `gemini-2.5-flash`
 
 ## Project layout highlights
 

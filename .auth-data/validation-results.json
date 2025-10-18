@@ -45,13 +45,58 @@
       },
       "overallScore": 81,
       "passed": true
+    },
+    "CNTR_1336769417_1760759682779": {
+      "testId": "CNTR_1336769417_1760759682779",
+      "timestamp": "2025-10-18T03:54:42.779Z",
+      "query": "playbook for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Portwarden AI Playbook: ALR-861600 - Duplicate Container Snapshot Detected\n\n**Incident:** ALR-861600 - Duplicate container snapshot detected (Medium)\n**Container ID:** CMAU0000020\n**Summary:** Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.\n**Reference:** [KB-2210] CNTR: Duplicate Container information received\n\n---\n\n**Objective:** Resolve duplicate container snapshot for CMAU0000020, ensure data consistency, and restore accurate inventory views.\n\n**Action Steps:**\n\n1.  **Acknowledge and Review Incident Details**\n    *   Confirm the alert details match the provided context.\n    *   Review `container_service.log` for the `WARN container-version DuplicateSnapshotAttempt cntr_no=CMAU0000020` entry to confirm the exact timestamp and context of the duplication event.\n\n2.  **Detect Duplicate Snapshots (Initial Verification)**\n    *   Query the `container` database table to identify all entries for `CMAU0000020`, specifically looking for multiple records with identical or near-identical timestamps that indicate a duplicate snapshot. This aligns with [KB-2210] Action 1.\n\n    ```sql\n    SQL Query: Retrieve Duplicate Candidates\n    SELECT\n        id,\n        cntr_no,\n        location,\n        status,\n        snapshot_timestamp,\n        created_at\n    FROM\n        container_snapshots\n    WHERE\n        cntr_no = 'CMAU0000020'\n    ORDER BY\n        snapshot_timestamp DESC, created_at DESC;\n    ```\n    *   **Verification:** Confirm that multiple rows exist for `CMAU0000020` with very close `snapshot_timestamp` values, as indicated by the alert. Identify the primary key (`id`) for all duplicate entries.\n\n3.  **Retain Most Recent Snapshot Only**\n    *   Identify the single most recent and correct snapshot for `CMAU0000020` based on `snapshot_timestamp` and `created_at`. All other duplicate entries for this container must be archived or removed. This aligns with [KB-2210] Action 2.\n    *   **Safety Precaution:** Before proceeding, perform a backup of the affected rows or the entire `container_snapshots` table if policy dictates.\n\n    ```sql\n    SQL Query: Identify and Archive/Delete Duplicate Rows (Example - Adapt to your archiving policy)\n    -- Step 3a: Identify the ID of the most recent valid snapshot\n    SELECT id INTO @latest_id\n    FROM container_snapshots\n    WHERE cntr_no = 'CMAU0000020'\n    ORDER BY snapshot_timestamp DESC, created_at DESC\n    LIMIT 1;\n\n    -- Step 3b: Archive/Delete all other snapshots for CMAU0000020\n    -- OPTION A: Archive to a history table (Recommended for auditability)\n    INSERT INTO container_snapshots_history\n    SELECT *\n    FROM container_snapshots\n    WHERE cntr_no = 'CMAU0000020' AND id != @latest_id;\n\n    -- OPTION B: Delete directly (Use with extreme caution and only if archiving is not an option)\n    DELETE FROM container_snapshots\n    WHERE cntr_no = 'CMAU0000020' AND id != @latest_id;\n    ```\n    *   **Verification:** Execute the initial `SELECT` query from Step 2 again. Confirm that only one row for `CMAU0000020` remains in the `container_snapshots` table, and it is the intended most recent snapshot.\n\n4.  **Rebuild Cache Consumers**\n    *   Trigger a refresh or rebuild of the relevant cache consumers that rely on container snapshot data. This ensures downstream systems and APIs receive the corrected, single snapshot for `CMAU0000020`. This aligns with [KB-2210] Action 3.\n\n    ```api\n    API Call: Trigger Cache Refresh (Example - Adjust endpoint and payload as per system design)\n    POST /api/v1/cache/rebuild\n    Headers:\n        Content-Type: application/json\n        Authorization: Bearer <YOUR_AUTH_TOKEN>\n    Body:\n        {\n            \"module\": \"container_snapshots\",\n            \"entity_id\": \"CMAU0000020\",\n            \"force_refresh\": true\n        }\n    ```\n    *   **Verification:**\n        *   Monitor the API response for success (e.g., HTTP 200 OK).\n        *   Check `cache_service.log` or similar logs for confirmation that the cache rebuild for `CMAU0000020` was initiated and completed successfully.\n        *   If possible, verify data consistency in a downstream system or API endpoint that consumes this data (e.g., query the yard management system's API for `CMAU0000020` to ensure it shows the correct, single location/status).\n\n---\n\n**Ready to Close Checklist:**\n\n*   [ ] Confirmed duplicate snapshots were identified in the database.\n*   [ ] Successfully retained only the most recent, valid snapshot for `CMAU0000020`.\n*   [ ] Verified that only one record for `CMAU0000020` exists in the `container_snapshots` table.\n*   [ ] Triggered and confirmed successful cache rebuild/refresh for container data.\n*   [ ] Verified (if possible) that downstream systems reflect the corrected container data.\n*   [ ] Incident log updated with resolution steps and verification outcomes.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
     }
   },
   "summary": {
-    "totalTests": 1,
-    "passedTests": 1,
+    "totalTests": 2,
+    "passedTests": 2,
     "failedTests": 0,
-    "avgAccuracy": 81,
-    "lastRun": "2025-10-18T03:07:50.014Z"
+    "avgAccuracy": 84,
+    "lastRun": "2025-10-18T03:54:42.781Z"
   }
 }
