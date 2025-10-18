@@ -5,9 +5,41 @@
 	import Header from '$lib/components/Header.svelte';
 	import { translateError } from '$lib/errorTranslator';
 	import { onMount } from 'svelte';
+	export let data;
 
 	/** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
 	let errorObj = null;
+
+	let threadInit = null;
+	let threadError = '';
+	let threadLoading = false;
+
+	$: threadNotes = Array.isArray(threadInit?.result?.notes) ? threadInit.result.notes : [];
+	$: threadSteps = Array.isArray(threadInit?.result?.steps) ? threadInit.result.steps : [];
+	$: threadCode = Array.isArray(threadInit?.result?.code_to_be_ran)
+		? threadInit.result.code_to_be_ran
+		: [];
+	$: threadChecklists = Array.isArray(threadInit?.result?.checklists)
+		? threadInit.result.checklists
+		: [];
+
+	async function initializeThread() {
+		threadLoading = true;
+		threadError = '';
+		try {
+			const response = await fetch('/api/gpt5/thread', { method: 'POST' });
+			const data = await response.json();
+			if (!response.ok) {
+				throw new Error(data?.error || 'Failed to initialize AI thread');
+			}
+			threadInit = data;
+		} catch (error) {
+			threadError = error instanceof Error ? error.message : 'Unable to initialize AI thread';
+			console.error('Thread initialization failed:', error);
+		} finally {
+			threadLoading = false;
+		}
+	}
 
 	let scrollY = 0;
 	let innerHeight = 0;
@@ -74,6 +106,7 @@
 	}
 
 	onMount(() => {
+		initializeThread();
 		mounted = true;
 
 		// Start counter animations with less staggered delays for smoother feel
@@ -138,6 +171,96 @@
 	</div>
 </section>
 
+<section class="ai-briefing-section">
+	<div class="ai-briefing-container">
+		<div class="section-header">
+			<h2 class="section-title">AI Safety Briefing</h2>
+			<p class="section-subtitle">
+				Automated guidance generated from operational references at session start
+			</p>
+		</div>
+
+		{#if threadLoading}
+			<div class="ai-briefing-card loading">Initializing co-pilot briefing...</div>
+		{:else if threadError}
+			<div class="ai-briefing-card error">{threadError}</div>
+		{:else if threadInit}
+			<div class="ai-briefing-grid">
+				<div class="ai-briefing-card">
+					<h3>Important Safety Notes</h3>
+					{#if threadNotes.length === 0}
+						<p class="placeholder">No safety notes returned.</p>
+					{:else}
+						<ul>
+							{#each threadNotes as note}
+								<li>{note}</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+
+				<div class="ai-briefing-card">
+					<h3>Action Steps</h3>
+					{#if threadSteps.length === 0}
+						<p class="placeholder">No action steps provided.</p>
+					{:else}
+						<ol>
+							{#each threadSteps as step, index}
+								<li>
+									{#if typeof step === 'string'}
+										{step}
+									{:else}
+										<strong>{step.title ?? `Step ${index + 1}`}</strong>
+										{#if step.description}
+											<div class="step-detail">{step.description}</div>
+										{/if}
+										{#if step.location || step.execution_context}
+											<span class="step-tag">Run in {step.location ?? step.execution_context}</span>
+										{/if}
+									{/if}
+								</li>
+							{/each}
+						</ol>
+					{/if}
+				</div>
+
+				<div class="ai-briefing-card">
+					<h3>Code to Execute</h3>
+					{#if threadCode.length === 0}
+						<p class="placeholder">No execution scripts identified.</p>
+					{:else}
+						<ul class="code-list">
+							{#each threadCode as item}
+								<li>
+									<div class="code-language">{item.language ?? 'Unspecified'}</div>
+									<div class="code-actions">
+										{item.actions ?? item.details ?? item.description ?? ''}
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+
+				<div class="ai-briefing-card">
+					<h3>Verification Checklists</h3>
+					{#if threadChecklists.length === 0}
+						<p class="placeholder">No verification checklist supplied.</p>
+					{:else}
+						<ul>
+							{#each threadChecklists as item}
+								<li>{item}</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			</div>
+		{:else}
+			<div class="ai-briefing-card placeholder">Awaiting AI briefing.</div>
+		{/if}
+	</div>
+</section>
+
 <!-- Operations Overview -->
 <section class="operations-section">
 	<div class="operations-content">
@@ -182,86 +305,88 @@
 	</div>
 </section>
 
-<!-- Live Incidents Dashboard -->
-<section class="incidents-section">
-	<div class="incidents-content">
-		<div class="section-header">
-			<h2 class="section-title">Live Incidents Dashboard</h2>
-			<p class="section-subtitle">Real-time incident monitoring and AI-powered assistance</p>
-		</div>
-
-		<div class="dashboard-grid">
-			<div class="incident-sidebar">
-				<div class="panel-header">
-					<h3>Live Incidents</h3>
-					<span class="incident-count">{incidents.length} Active</span>
-				</div>
-
-				<div class="incident-list-items">
-					{#each incidents.slice(0, 5) as incident}
-						<div class="incident-item">
-							<div class="incident-header">
-								<span class="incident-id">{incident.displayId}</span>
-								<span class="severity-badge {safeSeverity(incident.severity)}"
-									>{incident.severity}</span
-								>
-							</div>
-							<h4 class="incident-title">{incident.title}</h4>
-							<p class="incident-summary">{incident.summary}</p>
-							<div class="incident-meta">
-								<span>🕐 {formatTimestamp(incident.occurredAt) || 'Just now'}</span>
-								<span>📍 {incident.channel || 'Port Authority'}</span>
-							</div>
-						</div>
-					{/each}
-				</div>
-
-				<a href="/incidents" class="view-all-btn">View All Incidents →</a>
+{#if data?.user}
+	<!-- Live Incidents Dashboard -->
+	<section class="incidents-section">
+		<div class="incidents-content">
+			<div class="section-header">
+				<h2 class="section-title">Live Incidents Dashboard</h2>
+				<p class="section-subtitle">Real-time incident monitoring and AI-powered assistance</p>
 			</div>
 
-			<div class="incident-detail-panel">
-				<div class="panel-header">
-					<h3>Port Operations Overview</h3>
-					<div class="status-indicator online">System Online</div>
-				</div>
-
-				<div class="operations-overview">
-					<div class="overview-grid">
-						<div class="overview-stat">
-							<h4>Active Vessels</h4>
-							<span class="overview-value">47</span>
-							<span class="overview-trend">+3 today</span>
-						</div>
-						<div class="overview-stat">
-							<h4>Cargo Throughput</h4>
-							<span class="overview-value">12.4K</span>
-							<span class="overview-trend">TEU today</span>
-						</div>
-						<div class="overview-stat">
-							<h4>System Health</h4>
-							<span class="overview-value">98.7%</span>
-							<span class="overview-trend">Uptime</span>
-						</div>
-						<div class="overview-stat">
-							<h4>Response Time</h4>
-							<span class="overview-value">&lt;2min</span>
-							<span class="overview-trend">Average</span>
-						</div>
+			<div class="dashboard-grid">
+				<div class="incident-sidebar">
+					<div class="panel-header">
+						<h3>Live Incidents</h3>
+						<span class="incident-count">{incidents.length} Active</span>
 					</div>
 
-					<div class="next-actions">
-						<h4>Quick Actions</h4>
-						<div class="action-grid">
-							<a href="/incidents" class="quick-action">Manage Incidents</a>
-							<a href="/archive" class="quick-action">View Archive</a>
-							<button class="quick-action">Generate Report</button>
+					<div class="incident-list-items">
+						{#each incidents.slice(0, 5) as incident}
+							<div class="incident-item">
+								<div class="incident-header">
+									<span class="incident-id">{incident.displayId}</span>
+									<span class="severity-badge {safeSeverity(incident.severity)}"
+										>{incident.severity}</span
+									>
+								</div>
+								<h4 class="incident-title">{incident.title}</h4>
+								<p class="incident-summary">{incident.summary}</p>
+								<div class="incident-meta">
+									<span>🕐 {formatTimestamp(incident.occurredAt) || 'Just now'}</span>
+									<span>📍 {incident.channel || 'Port Authority'}</span>
+								</div>
+							</div>
+						{/each}
+					</div>
+
+					<a href="/incidents" class="view-all-btn">View All Incidents →</a>
+				</div>
+
+				<div class="incident-detail-panel">
+					<div class="panel-header">
+						<h3>Port Operations Overview</h3>
+						<div class="status-indicator online">System Online</div>
+					</div>
+
+					<div class="operations-overview">
+						<div class="overview-grid">
+							<div class="overview-stat">
+								<h4>Active Vessels</h4>
+								<span class="overview-value">47</span>
+								<span class="overview-trend">+3 today</span>
+							</div>
+							<div class="overview-stat">
+								<h4>Cargo Throughput</h4>
+								<span class="overview-value">12.4K</span>
+								<span class="overview-trend">TEU today</span>
+							</div>
+							<div class="overview-stat">
+								<h4>System Health</h4>
+								<span class="overview-value">98.7%</span>
+								<span class="overview-trend">Uptime</span>
+							</div>
+							<div class="overview-stat">
+								<h4>Response Time</h4>
+								<span class="overview-value">&lt;2min</span>
+								<span class="overview-trend">Average</span>
+							</div>
+						</div>
+
+						<div class="next-actions">
+							<h4>Quick Actions</h4>
+							<div class="action-grid">
+								<a href="/incidents" class="quick-action">Manage Incidents</a>
+								<a href="/archive" class="quick-action">View Archive</a>
+								<button class="quick-action">Generate Report</button>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
-</section>
+	</section>
+{/if}
 
 {#if errorObj}
 	<div class="error-section">
@@ -335,6 +460,106 @@
 		text-align: center;
 		max-width: 900px;
 		padding: 2rem;
+	}
+
+	.ai-briefing-section {
+		padding: 4rem 2rem;
+		background: linear-gradient(180deg, #0a0f1c 0%, #111c31 100%);
+	}
+
+	.ai-briefing-container {
+		max-width: 1100px;
+		margin: 0 auto;
+	}
+
+	.ai-briefing-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.ai-briefing-card {
+		background: rgba(15, 23, 42, 0.65);
+		border: 1px solid rgba(96, 165, 250, 0.18);
+		border-radius: 1rem;
+		padding: 1.5rem;
+		box-shadow: 0 18px 45px rgba(15, 23, 42, 0.35);
+		backdrop-filter: blur(12px);
+		color: #e2e8f0;
+	}
+
+	.ai-briefing-card h3 {
+		margin-top: 0;
+		margin-bottom: 0.75rem;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: #f8fafc;
+	}
+
+	.ai-briefing-card.loading,
+	.ai-briefing-card.error,
+	.ai-briefing-card.placeholder {
+		text-align: center;
+		font-size: 1rem;
+	}
+
+	.ai-briefing-card.error {
+		border-color: rgba(248, 113, 113, 0.4);
+		color: #fecaca;
+	}
+
+	.ai-briefing-card ul,
+	.ai-briefing-card ol {
+		margin: 0;
+		padding-left: 1.1rem;
+		color: #cbd5e1;
+	}
+
+	.ai-briefing-card li + li {
+		margin-top: 0.65rem;
+	}
+
+	.placeholder {
+		color: #94a3b8;
+		font-style: italic;
+	}
+
+	.step-detail {
+		margin-top: 0.35rem;
+		color: #94a3b8;
+		font-size: 0.95rem;
+	}
+
+	.step-tag {
+		display: inline-block;
+		margin-top: 0.5rem;
+		padding: 0.25rem 0.65rem;
+		border-radius: 999px;
+		background: rgba(59, 130, 246, 0.2);
+		color: #bfdbfe;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+
+	.code-list {
+		list-style: none;
+		padding-left: 0;
+	}
+
+	.code-list li + li {
+		margin-top: 1rem;
+	}
+
+	.code-language {
+		font-weight: 600;
+		color: #60a5fa;
+	}
+
+	.code-actions {
+		margin-top: 0.35rem;
+		font-size: 0.95rem;
+		color: #cbd5e1;
 	}
 
 	.hero-content h1 {

@@ -221,13 +221,103 @@
       },
       "overallScore": 86,
       "passed": true
+    },
+    "CNTR_1336769417_1760806252701": {
+      "testId": "CNTR_1336769417_1760806252701",
+      "timestamp": "2025-10-18T16:50:52.701Z",
+      "query": "playbook for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Playbook: ALR-861600 — Duplicate container snapshot detected for CMAU0000020\nReference: [KB-2210] (CNTR-024) Duplicate Container information received\n\nImportant safety notes (do before modifications)\n- Take a full logical backup of the container table and application state before any DML. Work in a transaction or maintenance window if available.\n- Test the deletion/archive steps on staging with an identical schema first.\n- No escalation required per guidance; proceed per KB-2210.\n\nAction Steps (numbered, labeled) with verification\n\n1) Confirm duplicate snapshots exist (Detect)\n- Purpose: Verify there are multiple rows for CMAU0000020 and capture metadata (ids, timestamps, versions).\n- Command (read-only):\n```sql\n-- [type: SQL]\nSELECT id, cntr_no, snapshot_ts, version, source, created_by\nFROM container\nWHERE cntr_no = 'CMAU0000020'\nORDER BY snapshot_ts DESC, id DESC;\n```\n- Verification:\n  - Confirm query returns >1 row.\n  - Record the id of the newest row (keep_id) and older ids (archive_ids).\n  - Save the query output to incident evidence (container_duplicates_<timestamp>.csv).\n\n2) Backup/Archive older duplicates (Retain most recent snapshot only, per KB-2210)\n- Purpose: Preserve older rows before removal so you can restore or audit.\n- Create an archive table if not present and copy older rows into it:\n```sql\n-- [type: SQL]\n-- create archive table (one-time)\nCREATE TABLE IF NOT EXISTS container_archive AS TABLE container WITH NO DATA;\n\n-- archive older rows (archive everything except the newest snapshot)\nWITH latest AS (\n  SELECT id FROM container\n  WHERE cntr_no = 'CMAU0000020'\n  ORDER BY snapshot_ts DESC, id DESC\n  LIMIT 1\n)\nINSERT INTO container_archive\nSELECT * FROM container\nWHERE cntr_no = 'CMAU0000020' AND id NOT IN (SELECT id FROM latest);\n```\n- Verification:\n  - Run:\n```sql\n-- [type: SQL]\nSELECT COUNT(*) AS archived_count FROM container_archive WHERE cntr_no = 'CMAU0000020';\n```\n  - Confirm archived_count equals (original duplicate count - 1).\n  - Ensure the archive table copy is stored in secure evidence storage and note file name.\n\n3) Remove older duplicate rows (Preserve latest operational state)\n- Purpose: Ensure only the latest snapshot remains in the operational container table.\n- Safe delete pattern (identify keep_id first):\n```sql\n-- [type: SQL]\n-- Identify keep_id\nSELECT id INTO TEMPORARY keep_row FROM container\nWHERE cntr_no = 'CMAU0000020'\nORDER BY snapshot_ts DESC, id DESC\nLIMIT 1;\n\n-- Delete others\nDELETE FROM container\nWHERE cntr_no = 'CMAU0000020' AND id NOT IN (SELECT id FROM keep_row);\n```\n(If your DB does not support SELECT INTO TEMPORARY as shown, first run the SELECT to capture keep_id externally and then run the DELETE with that id.)\n- Verification:\n  - Re-run:\n```sql\n-- [type: SQL]\nSELECT id, cntr_no, snapshot_ts, version FROM container WHERE cntr_no = 'CMAU0000020';\n```\n  - Confirm exactly 1 row remains and it matches the most recent snapshot recorded earlier.\n  - Record the result and store in incident evidence.\n\n4) Update audit/tracking records\n- Purpose: Leave a trace of the corrective action for audit and future diagnosis (per KB-2210).\n- Insert incident audit row:\n```sql\n-- [type: SQL]\nINSERT INTO container_audit (cntr_no, action, performed_by, performed_at, note)\nVALUES ('CMAU0000020', 'ARCHIVE_AND_DEDUPE', current_user, now(),\n 'Archived older duplicate snapshots; retained id=<keep_id>; ref ALR-861600, KB-2210');\n```\n- Verification:\n  - Confirm the audit row exists:\n```sql\n-- [type: SQL]\nSELECT * FROM container_audit WHERE cntr_no='CMAU0000020' ORDER BY performed_at DESC LIMIT 5;\n```\n\n5) Trigger downstream sync / rebuild cache consumers (per KB-2210)\n- Purpose: Ensure API consumers and caches receive the corrected single snapshot.\n- Example API call to trigger a resync for the container (adjust endpoint/auth to your environment):\n```http\n# [type: API]\ncurl -X POST \"https://internal-api.example.com/internal/containers/resync\" \\\n  -H \"Authorization: Bearer $ADMIN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"cntr_no\":\"CMAU0000020\",\"reason\":\"Duplicate snapshot cleanup ALR-861600\",\"force\":true}'\n```\n- If you use a message bus (Kafka), publish an event:\n```http\n# [type: API]\n# Example: publish to internal topic (pseudo)\nPOST /events/topic/container-updates\n{\n  \"cntr_no\": \"CMAU0000020\",\n  \"event\": \"rebuild_snapshot\",\n  \"source\": \"ALR-861600\",\n  \"timestamp\": \"2025-10-18T...Z\"\n}\n```\n- Verification:\n  - Confirm API returns success (200/202) and response body indicates queued/resynced.\n  - Check consumer logs for successful processing:\n    - container_service.log: look for a sync/resync completion entry with cntr_no=CMAU0000020.\n```bash\n# verify in logs\ngrep \"CMAU0000020\" /var/log/container_service.log | grep -i resync\ngrep \"DuplicateSnapshotAttempt\" /var/log/container_service.log\n```\n\n6) Monitor post-fix stability and absence of repeated duplicate attempts\n- Purpose: Ensure duplicates do not reoccur and that system is stable.\n- Short-term monitoring (first 60 minutes):\n  - Run the duplicate detection query periodically (every 5–15 minutes) for 1 hour:\n```sql\n-- [type: SQL]\nSELECT COUNT(*) FROM container WHERE cntr_no = 'CMAU0000020';\n```\n  - Monitor logs for new DuplicateSnapshotAttempt warnings:\n```bash\n# [type: API/CLI]\ntail -f /var/log/container_service.log | grep --line-buffered \"DuplicateSnapshotAttempt\\|CMAU0000020\"\n```\n- Verification:\n  - No new DuplicateSnapshotAttempt entries for CMAU0000020 after the fix.\n  - Consumers (APIs, yard inventory views) reflect the corrected state — perform a representative API GET call:\n```http\n# [type: API]\ncurl -H \"Authorization: Bearer $USER_TOKEN\" \\\n  \"https://api.example.com/v1/containers/CMAU0000020\"\n```\n  - Confirm returned payload matches the retained snapshot.\n\n7) Document evidence and close incident\n- Purpose: Package evidence for post-incident review and closure.\n- Evidence to attach:\n  - Original detection output (first query) and timestamps.\n  - container_service.log excerpts showing DuplicateSnapshotAttempt and subsequent resync logs.\n  - container_archive records dump for CMAU0000020.\n  - SQL audit row id and content.\n- Include KB reference in notes: [KB-2210] CNTR-024.\n\nReady to close checklist\n- [ ] Full backup of container table performed and stored (path: <location>).\n- [ ] Older duplicate rows archived to container_archive (archive count verified).\n- [ ] Only latest snapshot for CMAU0000020 exists in production container table.\n- [ ] container_audit updated with action record.\n- [ ] Downstream cache/consumers triggered and processed the resync.\n- [ ] No new DuplicateSnapshotAttempt warnings for CMAU0000020 in the monitoring window (60 minutes).\n- [ ] API/yard inventory views show corrected data for CMAU0000020.\n- [ ] All evidence files (SQL exports, logs, API responses) attached to incident record.\n- [ ] KB reference added to incident: [KB-2210] (CNTR-024)\n- [ ] Stakeholders notified (Yard Ops, Data QA) — include names/timestamps.\n\nNotes and follow-up\n- If duplicates reappear, capture the full inbound message stream and source (which service produced both snapshots) and open follow-up incident referencing KB-2210; escalate per local on-call policy.\n- KB link: [KB-2210] contains the recommended retention and archive approach and downstream sync steps used above.\n\nIf you want, I can generate the specific SQL DELETE statement for your DB flavor (Postgres/MySQL/Oracle) or construct the exact curl command with your environment variables/endpoint.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
+    },
+    "CNTR_1336769417_1760808238855": {
+      "testId": "CNTR_1336769417_1760808238855",
+      "timestamp": "2025-10-18T17:23:58.855Z",
+      "query": "playbook for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Incident ALR-861600 — Playbook for duplicate container snapshot (CMAU0000020)\nReference: [KB-2210] CNTR: Duplicate Container information received (CNTR-024)\n\nNo escalation required. Follow the steps below in order. Each step contains the action, the exact SQL/API commands to run (in code blocks labeled with type), and verification checks.\n\n1) Action 1 — Confirm duplicate snapshots exist\n- Purpose: Verify there are multiple snapshot rows for CMAU0000020 and collect evidence before any change (per [KB-2210]).\n- Commands:\n```sql\n-- type: SQL\n-- List rows for the container with timestamps and primary key\nSELECT id, cntr_no, version, created_at, updated_at, payload\nFROM container\nWHERE cntr_no = 'CMAU0000020'\nORDER BY created_at ASC;\n```\n- Log check:\n```bash\n# type: API\n# Search service log for DuplicateSnapshotAttempt lines\ngrep \"DuplicateSnapshotAttempt\" container_service.log | grep \"CMAU0000020\" || true\n```\n- Verification:\n  - Confirm SQL returns >1 row for cntr_no=CMAU0000020.\n  - Confirm timestamps show two inserts within one second (or matching timestamps as indicated in evidence).\n  - Capture and attach the output and the log lines to the incident record.\n\n2) Action 2 — Identify the most recent snapshot to retain\n- Purpose: Determine the single canonical snapshot to keep (most recent operational state).\n- Commands:\n```sql\n-- type: SQL\n-- Identify latest snapshot (by created_at or version as appropriate)\nSELECT id, cntr_no, version, created_at, updated_at\nFROM container\nWHERE cntr_no = 'CMAU0000020'\nORDER BY created_at DESC\nLIMIT 1;\n```\n- Verification:\n  - Note the id (LATEST_ID) of the row to retain and record its created_at/version.\n  - Confirm it represents the expected operational state (inspect payload if needed).\n\n3) Action 3 — Archive older duplicate rows (transactional)\n- Purpose: Remove older duplicates from live table while preserving them in an audit/archive table (per [KB-2210] Retain most recent snapshot only).\n- Preconditions: Ensure there is an archive table (container_archive). If it does not exist, create it following DB schema standards and notify DB team.\n- Commands (transactional):\n```sql\n-- type: SQL\nBEGIN;\n\n-- 1) Copy older duplicates to archive for audit trail\nINSERT INTO container_archive (id, cntr_no, version, created_at, updated_at, payload, archived_at)\nSELECT id, cntr_no, version, created_at, updated_at, payload, now()\nFROM container\nWHERE cntr_no = 'CMAU0000020'\n  AND id <> <LATEST_ID>;  -- replace with id from Action 2\n\n-- 2) Delete older duplicate rows from live table\nDELETE FROM container\nWHERE cntr_no = 'CMAU0000020'\n  AND id <> <LATEST_ID>;\n\nCOMMIT;\n```\n- If your DB expects soft-delete instead of physical delete, use update to set is_active=false and archived_at.\n- Verification:\n  - Run:\n```sql\n-- type: SQL\nSELECT count(*) AS live_count FROM container WHERE cntr_no='CMAU0000020';\nSELECT count(*) AS archive_count FROM container_archive WHERE cntr_no='CMAU0000020';\nSELECT id, created_at, updated_at FROM container WHERE cntr_no='CMAU0000020';\n```\n  - Confirm live_count == 1 and the remaining id == LATEST_ID.\n  - Confirm archive_count increased by (original_count - 1) and archived rows have archived_at timestamp.\n  - Attach DB transaction logs, affected rows count, and SQL outputs to the incident.\n\n4) Action 4 — Rebuild cache / push corrected snapshot to downstream consumers\n- Purpose: Ensure APIs, caches, yard inventory services, and other consumers pick up the corrected snapshot (per [KB-2210] Rebuild cache consumers).\n- Commands — example API calls (replace host/auth as required):\n```http\n# type: API\n# Trigger container-level cache refresh for this container\ncurl -X POST \"https://internal-api.example.local/v1/cache/refresh\" \\\n  -H \"Authorization: Bearer $ADMIN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"resource\":\"container\",\"cntr_no\":\"CMAU0000020\"}'\n```\n- If your system uses message broker:\n```http\n# type: API\n# Publish a sync event to the broker\ncurl -X POST \"https://broker.example.local/events\" \\\n  -H \"Authorization: Bearer $ADMIN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"event\":\"container.updated\",\"cntr_no\":\"CMAU0000020\",\"source\":\"container-service\"}'\n```\n- Verification:\n  - Confirm API returns HTTP 200 and body indicates success.\n  - Check consumer logs (API/gateway/cache) for pick-up events within 30–120 seconds.\n  - Re-query public inventory endpoints / APIs to ensure they return the corrected single snapshot:\n```sql\n-- type: SQL\nSELECT cntr_no, count(*) FROM container_view WHERE cntr_no='CMAU0000020' GROUP BY cntr_no;\n```\n  - Confirm the count is 1 and timestamps match the retained snapshot.\n\n5) Action 5 — Monitor logs and data quality checks\n- Purpose: Confirm duplicate attempts have stopped and yard inventory views are consistent.\n- Commands:\n```bash\n# type: API\n# Tail logs for duplicate attempt warnings (monitor for 30-60 minutes)\ntail -n 5000 -F container_service.log | grep --line-buffered \"DuplicateSnapshotAttempt\\|CMAU0000020\"\n```\n```sql\n-- type: SQL\n-- Run data-quality monitor check for container-duplicates (ad-hoc)\nSELECT cntr_no, count(*) AS snapshots\nFROM container\nWHERE cntr_no = 'CMAU0000020'\nGROUP BY cntr_no\nHAVING count(*) > 1;\n```\n- Verification:\n  - Confirm no new DuplicateSnapshotAttempt warnings appear for CMAU0000020 in the monitoring window.\n  - Confirm automated data quality monitor returns no duplicates for CMAU0000020.\n  - Validate yard inventory view: run an end-to-end check to ensure inventory counts and container location match expected state.\n\n6) Action 6 — Document, attach evidence, and notify stakeholders\n- Purpose: Ensure traceability and closure.\n- Tasks:\n  - Attach: SQL outputs (Actions 1–3), DB transaction ID, container_service.log lines showing initial warning, archive table insert results, cache-refresh API response.\n  - Document steps taken, LATEST_ID retained, archive record IDs, timestamps, and that no escalation was required per guidance.\n  - Notify yard ops and API consumers that the duplication was removed and the cache was rebuilt.\n\nVerification:\n  - Confirm incident ticket has attachments listed above.\n  - Confirm stakeholders acknowledged receipt (email or ticket update).\n\nReady to close checklist\n- [ ] Duplicate snapshots verified (Action 1) and evidence attached.\n- [ ] Latest snapshot identified and older snapshots archived (Action 2–3); live table contains single row for CMAU0000020.\n- [ ] Cache/consumers refreshed and API consumers report consistent data (Action 4).\n- [ ] Monitoring window completed with no new DuplicateSnapshotAttempt warnings for CMAU0000020 (Action 5).\n- [ ] Ticket updated with commands run, SQL outputs, logs, and archive references; stakeholders notified (Action 6).\n- [ ] Reference to KB applied: [KB-2210] CNTR-024 included in ticket notes.\n\nAdditional notes and safeguards\n- If you cannot perform DB writes in production, escalate to DB Admin with the SQL above and request transactional archive + delete. Reference [KB-2210] when requesting assistance.\n- If archive table does not exist, create it per retention policy and notify compliance before purging.\n- If duplicates are frequent, open a follow-up action to trace source service producing duplicate snapshot attempts and apply application-side dedup logic (see KB-2210 guidance).\n- For audit: do not permanently delete archived rows unless retention policy permits—use container_archive to preserve history.\n\nKB references used\n- [KB-2210] CNTR: Duplicate Container information received (CNTR-024)\n\nIf you want, I can:\n- Generate the exact SQL with the LATEST_ID inserted once you paste the SELECT output from Action 2.\n- Produce an email template to notify yard ops and API consumers with the attached evidence.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
     }
   },
   "summary": {
-    "totalTests": 5,
-    "passedTests": 5,
+    "totalTests": 7,
+    "passedTests": 7,
     "failedTests": 0,
     "avgAccuracy": 87,
-    "lastRun": "2025-10-18T16:09:10.608Z"
+    "lastRun": "2025-10-18T17:23:58.858Z"
   }
 }

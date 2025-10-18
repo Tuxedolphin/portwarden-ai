@@ -15,7 +15,7 @@ details.
 323099, but we are hit with Container Range Error**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -56,7 +56,7 @@ a different range. Why is this discrepancy not visible on their end?
 **CNTR: Discrepancy between customer portal and TOS for container CM**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -107,7 +107,7 @@ hours.
 count mismatch.**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -153,7 +153,7 @@ anomalies.
 voyage VA61**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -204,7 +204,7 @@ hours.
 CONTAINER_ID**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -250,7 +250,7 @@ rebuilt hot keys.
 manifest data**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -300,7 +300,7 @@ to reject backdated updates within 120 minutes.
 CONTAINER_ID on voyage V001**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -345,7 +345,7 @@ flip-flop bursts.
 **CNTR: Reefer CONTAINER_ID telemetry gap**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -385,7 +385,7 @@ gaps; confirmed stability post-recovery; tagged for periodic review.
 \'/containers/IRE8QJ/events\'**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -430,7 +430,7 @@ rebuilt hot keys.
 **eventTime for EMCU4728808CONTAINER_ID**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -475,7 +475,7 @@ updated monitoring for repeated segment anomalies.
 **CNTR: Mismatched shipment party codes for CONTAINER_ID**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -524,7 +524,7 @@ to reject backdated updates within 120 minutes.
 querying CONTAINER_ID**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -566,7 +566,7 @@ partner load testing near LOCATION.
 **CNTR: Auth token rejection for CONTAINER_ID on \'/auth/token\'**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -620,7 +620,7 @@ callbacks.
 lane hold**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -669,7 +669,7 @@ for 24h; retrained OCR with low-light samples; issued ops bulletin.
 CONTAINER_ID on voyage VA61**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -720,7 +720,7 @@ hours.
 count mismatch, sequence skipped**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -765,7 +765,7 @@ detection for \>30m skews.
 **CNTR: Callback delivery failures for CONTAINER_ID**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -817,7 +817,7 @@ callbacks.
 **CNTR: Callback delivery failures for CONTAINER_ID**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -870,7 +870,7 @@ callbacks.
 qualifier in EQD for CONTAINER_ID**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -914,7 +914,7 @@ detection for \>30m skews.
 **CNTR: Mismatched shipment party codes for CONTAINER_ID**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -971,7 +971,7 @@ hours.
 **CNTR: Auth token rejection for CONTAINER_ID on \'/bookings/search\'**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -1013,7 +1013,7 @@ minutes prior to mitigation..
 count mismatch**
 
 | Module | Container Report |
-|--------|------------------|
+| ------ | ---------------- |
 
 **Overview**
 
@@ -1058,7 +1058,7 @@ detection for \>30m skews.
 **CNTR: Mismatched shipment party codes for CONTAINER_ID**
 
 | Module | Container Booking |
-|--------|-------------------|
+| ------ | ----------------- |
 
 **Overview**
 
@@ -1102,7 +1102,7 @@ flip-flop bursts.
 duplicate Abbreviated Vessel Name.**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1145,7 +1145,7 @@ completed for bay BAY_NUMBER, but BAPLIE still lists units in those
 slots. Older timestamp regressed the plan**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1195,7 +1195,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1247,7 +1247,7 @@ re-published.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1302,7 +1302,7 @@ for error-rate/latency.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1355,7 +1355,7 @@ for error-rate/latency.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1411,7 +1411,7 @@ discharge completed for bay BAY_NUMBER, but BAPLIE still lists units in
 those slots. Older timestamp regressed the plan.**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1460,7 +1460,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 **VSL: Weather-Related Delay & Scheduling Adjustment SOP**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1510,7 +1510,7 @@ deployment.
 completed for bay BAY_NUMBER**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1560,7 +1560,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1614,7 +1614,7 @@ for error-rate/latency.
 completed for bay BAY_NUMBER**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1663,7 +1663,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1719,7 +1719,7 @@ re-published.
 completed for bay BAY_NUMBER**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1769,7 +1769,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 completed for bay BAY_NUMBER**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1819,7 +1819,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1873,7 +1873,7 @@ for error-rate/latency.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1928,7 +1928,7 @@ re-published.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -1981,7 +1981,7 @@ re-published.
 completed for bay BAY_NUMBER**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2031,7 +2031,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2091,7 +2091,7 @@ re-published.
 slot**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2139,7 +2139,7 @@ sanitized update to stakeholders.
 **VSL: ETA/ETB mismatch for VESSEL_ID on VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2199,7 +2199,7 @@ re-published.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2252,7 +2252,7 @@ for error-rate/latency.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2310,7 +2310,7 @@ re-published.
 **VSL: ETA/ETB mismatch for VESSEL_ID on voyage VOYAGE_ID**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2369,7 +2369,7 @@ re-published.
 discharge completed for bay BAY_NUMBER**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2419,7 +2419,7 @@ from quarantine; verified stowage/discharge alignment across systems.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2473,7 +2473,7 @@ for error-rate/latency.
 of requests latency \> 12s**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -2526,7 +2526,7 @@ for error-rate/latency.
 **API: Rate limiter throttled legitimate traffic after load surge**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2568,7 +2568,7 @@ sanitized RCA.
 PARTNER_ID**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2610,7 +2610,7 @@ probes to breaker; restored normal delivery and rebuilt backlog safely.
 partner PARTNER_ID, while TOS computed local UTC+8.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2676,7 +2676,7 @@ within 120 minutes.
 Partner_ID; schema validation failed\...**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2721,7 +2721,7 @@ threshold.
 **API: OAuth token rejection spikes on \'/events/subscribe\'**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2781,7 +2781,7 @@ coalescing.
 lag increased across EDI topic**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2823,7 +2823,7 @@ run-idempotency; published sanitized incident note and fixed dashboards.
 (UNH/UNT mismatch)**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2866,7 +2866,7 @@ overlapped causing duplicate API publications for the same event
 batch.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2906,7 +2906,7 @@ control; enabled poison-message quarantine and added SLO alerting
 CONTAINER_ID**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -2964,7 +2964,7 @@ within 120 minutes.
 **API: OAuth token rejection spikes on \'/auth/token\'**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3004,7 +3004,7 @@ probes to breaker; restored normal delivery and rebuilt backlog safely.
 **EDI: Rate limiter throttled legitimate traffic after load surge**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3045,7 +3045,7 @@ probes to breaker; restored normal delivery and rebuilt backlog safely.
 partner PARTNER_ID, while TOS computed local UTC+8.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3091,7 +3091,7 @@ PARTNER_ID; schema validation failed; containers in the message not
 reflected on the portal timeline.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3144,7 +3144,7 @@ verified pipeline end-to-end.
 **API: OAuth token rejection spikes on \'/containers/search\'**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3186,7 +3186,7 @@ sanitized RCA.
 partner PARTNER_ID, while TOS computed local UTC+8.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3231,7 +3231,7 @@ flushed CDN.
 **API: Rate limiter throttled legitimate traffic after load surge**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3284,7 +3284,7 @@ coalescing.
 lag increased across EDI topic**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3325,7 +3325,7 @@ run-idempotency; published sanitized incident note and fixed dashboards.
 CONTAINER_ID**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3370,7 +3370,7 @@ PARTNER_ID; schema validation failed; containers in the message not
 reflected on the portal timeline.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3416,7 +3416,7 @@ threshold.
 partner PARTNER_ID, while TOS computed local UTC+8.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3482,7 +3482,7 @@ within 120 minutes.
 mismatch)**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3528,7 +3528,7 @@ threshold.
 CONTAINER_ID**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3590,7 +3590,7 @@ within 120 minutes.
 later message had older eventTime**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3644,7 +3644,7 @@ verified pipeline end-to-end.
 partner PARTNER_ID, while TOS computed local UTC+8.**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3688,7 +3688,7 @@ flushed CDN.
 **CNTR: Duplicate Container information received**
 
 | Module | Container |
-|--------|-----------|
+| ------ | --------- |
 
 **Overview**
 
@@ -3699,32 +3699,32 @@ Later message had older timestamp; last-writer-wins regressed status.
 
 1.  Verify in DB
 
-    a.  SELECT \* FROM container WHERE cntr_no = :CONTAINER_NO ORDER BY
-        created_at DESC;
+    a. SELECT \* FROM container WHERE cntr_no = :CONTAINER_NO ORDER BY
+    created_at DESC;
 
 2.  Keep the latest record (highest created_at) and delete earlier
     records --- **with a preview and a safe, bounded delete**.
 
-    a.  SELECT c.\* FROM container c JOIN ( SELECT cntr_no, vessel_id,
-        eta_ts, MAX(created_at) AS max_created_at FROM container WHERE
-        cntr_no = :CONTAINER_NO AND vessel_id = :VESSEL_ID AND eta_ts =
-        :ETA_TS GROUP BY cntr_no, vessel_id, eta_ts ) keep ON
-        keep.cntr_no=c.cntr_no AND keep.vessel_id=c.vessel_id AND
-        keep.eta_ts=c.eta_ts WHERE c.created_at \< keep.max_created_at;
+    a. SELECT c.\* FROM container c JOIN ( SELECT cntr_no, vessel_id,
+    eta_ts, MAX(created_at) AS max_created_at FROM container WHERE
+    cntr_no = :CONTAINER_NO AND vessel_id = :VESSEL_ID AND eta_ts =
+    :ETA_TS GROUP BY cntr_no, vessel_id, eta_ts ) keep ON
+    keep.cntr_no=c.cntr_no AND keep.vessel_id=c.vessel_id AND
+    keep.eta_ts=c.eta_ts WHERE c.created_at \< keep.max_created_at;
 
 3.  Safe delete (keep latest only)
 
-    a.  DELETE c FROM container c JOIN ( SELECT cntr_no, vessel_id,
-        eta_ts, MAX(created_at) AS max_created_at FROM container WHERE
-        cntr_no = :CONTAINER_NO AND vessel_id = :VESSEL_ID AND eta_ts =
-        :ETA_TS GROUP BY cntr_no, vessel_id, eta_ts ) keep ON
-        keep.cntr_no=c.cntr_no AND keep.vessel_id=c.vessel_id AND
-        keep.eta_ts=c.eta_ts WHERE c.created_at \< keep.max_created_at;
+    a. DELETE c FROM container c JOIN ( SELECT cntr_no, vessel_id,
+    eta_ts, MAX(created_at) AS max_created_at FROM container WHERE
+    cntr_no = :CONTAINER_NO AND vessel_id = :VESSEL_ID AND eta_ts =
+    :ETA_TS GROUP BY cntr_no, vessel_id, eta_ts ) keep ON
+    keep.cntr_no=c.cntr_no AND keep.vessel_id=c.vessel_id AND
+    keep.eta_ts=c.eta_ts WHERE c.created_at \< keep.max_created_at;
 
 **VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice**
 
 | Module | Vessel |
-|--------|--------|
+| ------ | ------ |
 
 **Overview**
 
@@ -3744,33 +3744,33 @@ one active advice per system_vessel_name).
 
 <!-- -->
 
-a.  grep -i \"VESSEL_ERR_4\" vessel_advice_service.log
+a. grep -i \"VESSEL_ERR_4\" vessel_advice_service.log
 
 <!-- -->
 
 2.  Inspect Existing Advice Rows
 
-    a.  SELECT vessel_advice_no, system_vessel_name,
-        effective_start_datetime, effective_end_datetime,
-        system_vessel_name_active FROM vessel_advice WHERE
-        system_vessel_name = :system_vessel_name ORDER BY
-        effective_start_datetime;
+    a. SELECT vessel_advice_no, system_vessel_name,
+    effective_start_datetime, effective_end_datetime,
+    system_vessel_name_active FROM vessel_advice WHERE
+    system_vessel_name = :system_vessel_name ORDER BY
+    effective_start_datetime;
 
-    b.  identify active advice: row with effective_end_datetime IS NULL.
+    b. identify active advice: row with effective_end_datetime IS NULL.
 
-    c.  Record down
+    c. Record down
 
         i.  :active_vessel_advice_no (if any)
 
 3.  Check Port Programs Referencing Active Advice (Active only)
 
-    a.  SELECT application_no, vessel_advice_no, vessel_close_datetime,
-        deleted, berthing_status FROM berth_application WHERE
-        vessel_advice_no = :active_vessel_advice_no AND
-        vessel_close_datetime IS NULL AND berthing_status = \'A\' AND
-        deleted = \'N\';
+    a. SELECT application_no, vessel_advice_no, vessel_close_datetime,
+    deleted, berthing_status FROM berth_application WHERE
+    vessel_advice_no = :active_vessel_advice_no AND
+    vessel_close_datetime IS NULL AND berthing_status = \'A\' AND
+    deleted = \'N\';
 
-    b.  If result set not empty → active port programs exist.
+    b. If result set not empty → active port programs exist.
 
 **Decision** **Logic**
 
@@ -3807,7 +3807,7 @@ vessel_advice_no = :vessel_advice_no AND effective_end_datetime IS NULL;
 **EDI: EDI Message Timeout or Delay in Acknowledgment**
 
 | Module | EDI/API |
-|--------|---------|
+| ------ | ------- |
 
 **Overview**
 
@@ -3849,7 +3849,7 @@ means that the message isn't processed or moved forward.
 
 <!-- -->
 
-a.  grep -i \"REF-IFT-N\" edi_message_processing.log
+a. grep -i \"REF-IFT-N\" edi_message_processing.log
 
 <!-- -->
 
@@ -3857,43 +3857,40 @@ a.  grep -i \"REF-IFT-N\" edi_message_processing.log
 
 <!-- -->
 
-b.  Run a query on the edi_message table to find any messages that
-    either:  
-    - Have the ERROR status or  
-    - Have been received and processed (status: PARSED) but haven\'t
-    been properly acknowledged (i.e., ack_at is NULL).
+b. Run a query on the edi_message table to find any messages that
+either:  
+ - Have the ERROR status or  
+ - Have been received and processed (status: PARSED) but haven\'t
+been properly acknowledged (i.e., ack_at is NULL).
 
 For example, if a message was received by LINE-PSA and sent to PSA-TOS,
 but ack_at is NULL, it indicates that the message was parsed but wasn\'t
 properly acknowledged, leading to the ERROR status.
 
-c.  Run a query on the edi_message table to find any messages that have
-    been acknowledged (status: ACKED) but have not been properly
-    acknowledged (ack_at is at NULL) after 24 hours.
+c. Run a query on the edi_message table to find any messages that have
+been acknowledged (status: ACKED) but have not been properly
+acknowledged (ack_at is at NULL) after 24 hours.
 
-d.  SELECT edi_id, message_ref, sender, receiver, status, sent_at,
-    ack_at, error_text  
-    FROM edi_message  
-    WHERE status = \'ERROR\' OR (status = \'PARSED\' AND ack_at IS
-    NULL);
+d. SELECT edi_id, message_ref, sender, receiver, status, sent_at,
+ack_at, error_text  
+ FROM edi_message  
+ WHERE status = \'ERROR\' OR (status = \'PARSED\' AND ack_at IS
+NULL);
 
 #### **Decision Logic**
 
 - If NO active message (no message stuck in ERROR status with missing
   ack_at):
-
   - The timeout issue shouldn\'t occur. Recheck the acknowledgment logic
     or network connection to confirm if any messages were delayed.
 
 - If active message exists and no acknowledgment (message is stuck in
   ACKED status but no proper acknowledgment):
-
   - You can manually trigger acknowledgment for the message, ensuring it
     gets an appropriate ack_at timestamp
 
 - If acknowledgment failed (even though the message was attempted for
   acknowledgment):
-
   - You must process the message again or trigger acknowledgment
     manually as described below.
 
@@ -3903,8 +3900,8 @@ d.  SELECT edi_id, message_ref, sender, receiver, status, sent_at,
     the ERROR status but not properly acknowledged. Update the status
     and set the ack_at timestamp.
 
-    a.  \-- Trigger ACKED status update manually  
-        UPDATE edi_message  
-        SET status = \'ACKED\', ack_at = NOW(), error_text = NULL  
-        WHERE edi_id = \<edi_id\>; \-- Replace with the actual edi_id
-        (1, 2, 3, 4, n)
+    a. \-- Trigger ACKED status update manually  
+     UPDATE edi_message  
+     SET status = \'ACKED\', ack_at = NOW(), error_text = NULL  
+     WHERE edi_id = \<edi_id\>; \-- Replace with the actual edi_id
+    (1, 2, 3, 4, n)

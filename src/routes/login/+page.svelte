@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import Header from '$lib/components/Header.svelte';
 	let mode = 'login';
 	let email = '';
 	let password = '';
@@ -31,6 +31,8 @@
 		}
 	}
 </script>
+
+<Header />
 
 <!-- Maritime-themed background -->
 <div class="auth-background">
@@ -177,11 +179,11 @@
 	.auth-container {
 		position: relative;
 		z-index: 2;
-		min-height: 100vh;
+		min-height: calc(100vh - 96px);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 2rem;
+		padding: 6rem 2rem 2rem;
 	}
 
 	.auth-card {

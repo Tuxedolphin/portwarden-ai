@@ -14,7 +14,7 @@ const DEFAULT_API_VERSION = '2025-01-01-preview';
 const kbTracker = new KnowledgeBaseTracker();
 const validator = new ValidationFramework();
 
-const SYSTEM_TEXT = `You are Portwarden AI, a maritime duty officer co-pilot. 
+const SYSTEM_TEXT = `You are Portwarden AI, a maritime duty officer co-pilot.
 - Generate numbered action steps with clear labels
 - Use code blocks for SQL/API calls (labeled with type)
 - Reference KB articles using provided IDs [KB-1749]
@@ -46,9 +46,8 @@ function buildPrompt(incident, intent, sessionId) {
 		.map((action, index) => `${index + 1}. ${action.label} (${action.cite}): ${action.explanation}`)
 		.join('\n');
 
-	// Concise evidence summary (limit to 3 most recent)
+	// Concise evidence summary
 	const recentEvidence = incident.correlatedEvidence
-		.slice(-3)
 		.map((e) => `${e.source}: ${e.message.substring(0, 80)}...`)
 		.join('; ');
 

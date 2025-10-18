@@ -202,14 +202,28 @@
       "context": "escalation_generation",
       "sessionId": "session_1760803641184_o0elx5365",
       "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T16:50:22.400Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760806222400_urk9oi8n7",
+      "day": "2025-10-18"
+    },
+    {
+      "timestamp": "2025-10-18T17:23:31.237Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760808211237_x27ii6jkx",
+      "day": "2025-10-18"
     }
   ],
   "dailyStats": {
     "2025-10-18": {
       "articles": {
-        "CNTR: Duplicate Container information received": 29
+        "CNTR: Duplicate Container information received": 31
       },
-      "totalAccess": 29,
+      "totalAccess": 31,
       "uniqueArticles": 1
     }
   },
