@@ -23,10 +23,8 @@ npm run dev -- --open
 
 Environment variables:
 
-- `GPT_API_KEY` (required) – Azure OpenAI key for the ChatGPT 5 Mini deployment
-- `GPT_API_ENDPOINT` (optional) – override the Azure OpenAI endpoint; defaults to the hackathon endpoint
-- `GPT_DEPLOYMENT` (optional) – override the deployment name; defaults to `gpt-5-mini`
-- `GPT_API_VERSION` (optional) – override the API version; defaults to `2025-01-01-preview`
+- `GEMINI_API_KEY` (required) – key from Google AI Studio (Gemini 1.5 models)
+- `GEMINI_MODEL` (optional) – override model name, defaults to `gemini-1.5-flash`
 
 ## Project layout highlights
 
