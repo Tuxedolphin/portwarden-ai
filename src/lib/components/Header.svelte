@@ -135,17 +135,54 @@
     cursor: pointer; 
     padding: 0.5rem 0.75rem; 
     border-radius: 0.375rem;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-weight: 500;
     text-decoration: none;
     font-size: 0.9rem;
     min-height: 32px;
     display: inline-flex;
     align-items: center;
+    position: relative;
+    overflow: hidden;
   }
+  
   .link:hover {
     background: rgba(59,130,246,0.1);
     color: #bfdbfe;
+    transform: translateY(-1px);
+  }
+
+  /* Special styling for login link when user is not authenticated */
+  .link[href="/login"] {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    box-shadow: 0 4px 15px -4px rgba(59, 130, 246, 0.25);
+  }
+
+  .link[href="/login"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+  }
+
+  .link[href="/login"]:hover::before {
+    left: 100%;
+  }
+
+  .link[href="/login"]:hover {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -8px rgba(59, 130, 246, 0.4);
   }
 
   /* Mobile Responsive Styles */
