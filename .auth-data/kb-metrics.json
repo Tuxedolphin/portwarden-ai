@@ -2,21 +2,21 @@
   "articles": {
     "CNTR: Duplicate Container information received": {
       "title": "CNTR: Duplicate Container information received",
-      "accessCount": 5,
+      "accessCount": 23,
       "contexts": {
-        "playbook_generation": 4,
-        "escalation_generation": 1
+        "playbook_generation": 20,
+        "escalation_generation": 3
       },
       "effectiveness": 0,
       "resolutionCorrelation": [],
       "firstAccessed": "2025-10-18T03:07:29.364Z",
-      "lastAccessed": "2025-10-18T03:19:07.485Z"
+      "lastAccessed": "2025-10-18T03:58:23.927Z"
     }
   },
   "summary": {
     "totalArticles": 0,
-    "totalUsage": 5,
+    "totalUsage": 23,
     "avgEffectiveness": 0,
-    "lastUpdated": "2025-10-18T03:19:07.485Z"
+    "lastUpdated": "2025-10-18T03:58:23.927Z"
   }
 }

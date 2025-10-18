@@ -3,8 +3,21 @@ import mysql from 'mysql2/promise';
 import * as schema from './schema';
 import { env } from '$env/dynamic/private';
 
-if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+// Make database optional for deployment environments where it's not configured
+/** @type {any} */
+let db = null;
 
-const client = mysql.createPool(env.DATABASE_URL);
+if (env.DATABASE_URL) {
+	try {
+		const client = mysql.createPool(env.DATABASE_URL);
+		db = drizzle(client, { schema, mode: 'default' });
+		console.log('Database connection established');
+	} catch (error) {
+		console.warn('Database connection failed:', error instanceof Error ? error.message : String(error));
+		db = null;
+	}
+} else {
+	console.warn('DATABASE_URL is not set - database functionality will be unavailable');
+}
 
-export const db = drizzle(client, { schema, mode: 'default' });
+export { db };

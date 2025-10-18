@@ -15,6 +15,11 @@ export const load = async (event) => {
 
 export const actions = {
 	login: async (event) => {
+		// Check if database is available
+		if (!db) {
+			return fail(503, { message: 'Database not available - this is a demo feature that requires database setup.' });
+		}
+
 		const formData = await event.request.formData();
 	const username = String(formData.get('username') ?? '');
 	const password = String(formData.get('password') ?? '');
@@ -51,9 +56,14 @@ export const actions = {
 		return redirect(302, '/demo/lucia');
 	},
 	register: async (event) => {
+		// Check if database is available
+		if (!db) {
+			return fail(503, { message: 'Database not available - this is a demo feature that requires database setup.' });
+		}
+
 		const formData = await event.request.formData();
-		const username = String(formData.get('username') || '');
-		const password = String(formData.get('password') || '');
+	const username = String(formData.get('username') ?? '');
+	const password = String(formData.get('password') ?? '');
 
 		if (!validateUsername(username)) {
 			return fail(400, { message: 'Invalid username' });
