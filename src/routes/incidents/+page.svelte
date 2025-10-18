@@ -1,943 +1,1123 @@
 <script>
-	import { onMount } from 'svelte';
-	import Header from '$lib/components/Header.svelte';
-	import ErrorViewer from '$lib/ErrorViewer.svelte';
-	import { translateError } from '$lib/errorTranslator';
+  import { onMount } from 'svelte';
+  import Header from '$lib/components/Header.svelte';
+  import ErrorViewer from '$lib/ErrorViewer.svelte';
+  import { translateError } from '$lib/errorTranslator';
+  
+  /** @type {Array<any>} */
+  let items = [];
+  let total = 0;
+  let page = 1;
+  let pageSize = 10;
+  let showCreate = false;
+  let title = '';
+  let description = '';
+  let tags = '';
+  let toast = '';
 
-	/**
-	 * @typedef {Object} Incident
-	 * @property {string | number} id
-	 * @property {string} title
-	 * @property {string} description
-	 * @property {'open' | 'in-progress' | 'resolved'} status
-	 * @property {string} [created_at]
-	 * @property {string[]} [tags]
-	 */
+  // AI Co-pilot state
+  /** @type {any | null} */
+  let selectedIncident = null;
+  let playbookOutput = '';
+  let escalationOutput = '';
+  let playbookLoading = false;
+  let escalationLoading = false;
+  let showAiPanel = false;
+  /** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
+  let errorObj = null;
 
-	const pageSize = 6;
+  async function load() {
+    const res = await fetch(`/api/incidents?page=${page}&pageSize=${pageSize}`);
+    const data = await res.json();
+    items = data.results || [];
+    total = data.total || 0;
+  }
 
-	let page = 1;
-	let total = 0;
-	/** @type {Incident[]} */
-	let items = [];
-	let loading = true;
-	let toast = '';
-	/** @type {ReturnType<typeof translateError> | null} */
-	let errorObj = null;
+  async function createIncident() {
+    toast = '';
+    try {
+      const res = await fetch('/api/incidents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description, tags: tags.split(',').map(t=>t.trim()).filter(Boolean) }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to create incident');
+      showCreate = false; title = ''; description = ''; tags = '';
+      await load();
+    } catch (e) { toast = e instanceof Error ? e.message : 'Create failed'; }
+  }
 
-	let showCreate = false;
-	let title = '';
-	let description = '';
-	let tags = '';
+  /** @param {number} id */
+  async function archive(id) {
+    const res = await fetch(`/api/incidents/${id}/archive`, { method: 'POST' });
+    if (!res.ok) { toast = 'Archive failed'; return; }
+    await load();
+  }
 
-	let showAiPanel = false;
-	/** @type {Incident | null} */
-	let selectedIncident = null;
-	let playbookLoading = false;
-	let escalationLoading = false;
-	let playbookOutput = '';
-	let escalationOutput = '';
-	/** @type {ReturnType<typeof translateError> | null} */
-	let aiError = null;
+  /** @param {number} id @param {string} newStatus */
+  async function updateStatus(id, newStatus) {
+    toast = '';
+    try {
+      const res = await fetch(`/api/incidents/${id}`, { 
+        method: 'PATCH', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ status: newStatus }) 
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error?.error || 'Failed to update status');
+      }
+      await load();
+    } catch (e) { 
+      toast = e instanceof Error ? e.message : 'Update failed'; 
+    }
+  }
 
-	const statusLabels = {
-		open: 'Open',
-		'in-progress': 'In Progress',
-		resolved: 'Resolved'
-	};
+  /** @param {any} incident */
+  function selectIncidentForAI(incident) {
+    selectedIncident = incident;
+    playbookOutput = '';
+    escalationOutput = '';
+    errorObj = null;
+    showAiPanel = true;
+  }
 
-	/** @type {('open' | 'in-progress' | 'resolved')[]} */
-	const statusOptions = ['open', 'in-progress', 'resolved'];
+  /** @param {'playbook'|'escalation'} intent */
+  async function requestGemini(intent) {
+    if (!selectedIncident) return;
+    errorObj = null;
+    try {
+      if (intent === 'playbook') {
+        playbookLoading = true;
+      } else {
+        escalationLoading = true;
+      }
 
-	$: totalPages = Math.max(1, Math.ceil(total / pageSize));
-	$: openCount = items.filter((i) => i.status === 'open').length;
-	$: inProgressCount = items.filter((i) => i.status === 'in-progress').length;
-	$: resolvedCount = items.filter((i) => i.status === 'resolved').length;
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incidentId: selectedIncident.id, intent })
+      });
 
-	$: stats = [
-		{ label: 'Open incidents', value: openCount },
-		{ label: 'In progress', value: inProgressCount },
-		{ label: 'Resolved (7d)', value: resolvedCount }
-	];
+      const payload = await response.json();
 
-	onMount(loadIncidents);
+      if (!response.ok) {
+        const err = { status: response.status, payload: payload, url: '/api/gemini' };
+        throw err;
+      }
 
-	async function loadIncidents() {
-		loading = true;
-		toast = '';
-		errorObj = null;
+      if (intent === 'playbook') {
+        playbookOutput = payload.output;
+      } else {
+        escalationOutput = payload.output;
+      }
+    } catch (error) {
+      errorObj = translateError(error instanceof Error ? { message: error.message, stack: error.stack } : error);
+    } finally {
+      playbookLoading = false;
+      escalationLoading = false;
+    }
+  }
 
-		try {
-			const res = await fetch(`/api/incidents?page=${page}&pageSize=${pageSize}`);
-			/** @type {{ results?: any[]; total?: number }} */
-			const data = await res.json();
-
-			if (!res.ok) {
-				throw { status: res.status, payload: data };
-			}
-
-			const results = Array.isArray(data.results) ? data.results : [];
-			items = results.map((item) => ({
-				id: item.id,
-				title: item.title,
-				description: item.description,
-				status: item.status ?? 'open',
-				created_at: item.created_at,
-				tags: Array.isArray(item.tags) ? item.tags : []
-			}));
-			total = data.total ?? items.length;
-		} catch (error) {
-			errorObj = translateError(error);
-			toast = errorObj?.message ?? 'Failed to load incidents.';
-		} finally {
-			loading = false;
-		}
-	}
-
-	function resetCreateForm() {
-		title = '';
-		description = '';
-		tags = '';
-	}
-
-	function closeCreateModal() {
-		showCreate = false;
-		resetCreateForm();
-	}
-
-	/** @param {SubmitEvent} event */
-	async function submitCreate(event) {
-		event.preventDefault();
-		toast = '';
-
-		try {
-			const res = await fetch('/api/incidents', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					title,
-					description,
-					tags: parseTags(tags)
-				})
-			});
-
-			const data = await res.json();
-
-			if (!res.ok) {
-				throw { status: res.status, payload: data };
-			}
-
-			closeCreateModal();
-			await loadIncidents();
-			toast = 'Incident created successfully.';
-		} catch (error) {
-			errorObj = translateError(error);
-			toast = errorObj?.message ?? 'Failed to create incident.';
-		}
-	}
-
-	/**
-	 * @param {Incident['id']} incidentId
-	 * @param {'open' | 'in-progress' | 'resolved'} newStatus
-	 */
-	async function setStatus(incidentId, newStatus) {
-		toast = '';
-
-		try {
-			const res = await fetch(`/api/incidents/${incidentId}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ status: newStatus })
-			});
-
-			const data = await res.json();
-
-			if (!res.ok) {
-				throw { status: res.status, payload: data };
-			}
-
-			items = items.map((incident) =>
-				incident.id === incidentId ? { ...incident, status: newStatus } : incident
-			);
-		} catch (error) {
-			errorObj = translateError(error);
-			toast = errorObj?.message ?? 'Failed to update status.';
-		}
-	}
-
-	/** @param {Incident['id']} incidentId */
-	async function archiveIncident(incidentId) {
-		toast = '';
-
-		try {
-			const res = await fetch(`/api/incidents/${incidentId}/archive`, { method: 'POST' });
-			const data = await res.json();
-
-			if (!res.ok) {
-				throw { status: res.status, payload: data };
-			}
-
-			await loadIncidents();
-			toast = 'Incident archived.';
-		} catch (error) {
-			errorObj = translateError(error);
-			toast = errorObj?.message ?? 'Failed to archive incident.';
-		}
-	}
-
-	/** @param {Incident} incident */
-	function openAiPanel(incident) {
-		selectedIncident = incident;
-		showAiPanel = true;
-		playbookOutput = '';
-		escalationOutput = '';
-		aiError = null;
-	}
-
-	function closeAiPanel() {
-		showAiPanel = false;
-		selectedIncident = null;
-		playbookOutput = '';
-		escalationOutput = '';
-		aiError = null;
-	}
-
-	/** @param {'playbook' | 'escalation'} intent */
-	async function requestAi(intent) {
-		if (!selectedIncident) return;
-
-		aiError = null;
-
-		if (intent === 'playbook') {
-			playbookLoading = true;
-		} else {
-			escalationLoading = true;
-		}
-
-		try {
-			const res = await fetch('/api/chatgpt', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ incidentId: selectedIncident.id, intent })
-			});
-
-			const data = await res.json();
-
-			if (!res.ok) {
-				throw { status: res.status, payload: data };
-			}
-
-			if (intent === 'playbook') {
-				playbookOutput = data.output ?? '';
-			} else {
-				escalationOutput = data.output ?? '';
-			}
-		} catch (error) {
-			aiError = translateError(error);
-		} finally {
-			playbookLoading = false;
-			escalationLoading = false;
-		}
-	}
-
-	/** @param {string} value */
-	function parseTags(value) {
-		return value
-			.split(',')
-			.map((tag) => tag.trim())
-			.filter(Boolean);
-	}
-
-	/** @param {string | undefined} value */
-	function formatDate(value) {
-		if (!value) return 'Unknown';
-		const date = new Date(value);
-		return date.toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
-		});
-	}
-
-	function nextPage() {
-		if (page < totalPages) {
-			page += 1;
-			loadIncidents();
-		}
-	}
-
-	function prevPage() {
-		if (page > 1) {
-			page -= 1;
-			loadIncidents();
-		}
-	}
+  onMount(load);
 </script>
-
-<svelte:head>
-	<title>Incident Response | Portwarden AI</title>
-</svelte:head>
 
 <Header />
 
-<main class="incidents-view">
-	<section class="hero surface-card">
-		<div class="hero__content">
-			<div class="hero__copy">
-				<h1>Incident Response Mission Control</h1>
-				<p>
-					Track disruptions, coordinate remediation, and collaborate with ChatGPT 5 Mini to generate
-					response playbooks in seconds.
-				</p>
-				<div class="hero__actions">
-					<button class="button-primary" on:click={() => (showCreate = true)}>
-						+ Log incident
-					</button>
-					<button class="button-secondary" on:click={loadIncidents} disabled={loading}>
-						↻ Refresh
-					</button>
-				</div>
-			</div>
+<!-- Hero Header Section -->
+<section class="hero-header">
+  <div class="hero-content">
+    <div class="hero-text">
+      <h1>Incident Management</h1>
+      <p class="hero-subtitle">Monitor and resolve port operations incidents in real-time</p>
+    </div>
+    <button class="new-incident-btn" on:click={() => (showCreate = true)}>
+      <span class="btn-icon">+</span>
+      New Incident
+    </button>
+  </div>
+  
+  <!-- Statistics Bar -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-value">{items.filter(i => i.status === 'open').length}</span>
+      <span class="stat-label">Open</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{items.filter(i => i.status === 'in-progress').length}</span>
+      <span class="stat-label">In Progress</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{items.filter(i => i.status === 'resolved').length}</span>
+      <span class="stat-label">Resolved</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{total}</span>
+      <span class="stat-label">Total</span>
+    </div>
+  </div>
+</section>
 
-			<aside class="hero__panel surface-muted">
-				<header class="panel-header">
-					<h3>Today&apos;s posture</h3>
-					<span class="status-pill online">ChatGPT 5 Mini online</span>
-				</header>
-				<ul class="stat-list">
-					{#each stats as stat}
-						<li>
-							<span class="label">{stat.label}</span>
-							<strong>{stat.value}</strong>
-						</li>
-					{/each}
-				</ul>
-			</aside>
-		</div>
-	</section>
+<!-- Main Content Section -->
+<section class="incidents-content">
+  {#if toast}
+    <div class="toast">{toast}</div>
+  {/if}
+  
+  <div class="incidents-grid">
+    {#each items as incident}
+      <article class="incident-card">
+        <header class="incident-header">
+          <div class="incident-id">#{incident.id}</div>
+          <div class="status-dropdown">
+            <select 
+              class={`status-select ${incident.status}`} 
+              value={incident.status} 
+              on:change={(e) => updateStatus(incident.id, e.currentTarget.value)}
+            >
+              <option value="open">Open</option>
+              <option value="in-progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+        </header>
+        
+        <div class="incident-body">
+          <h3 class="incident-title">{incident.title}</h3>
+          <p class="incident-description">{incident.description}</p>
+          
+          {#if incident.tags && incident.tags.length > 0}
+            <div class="tag-cloud">
+              {#each incident.tags as tag}
+                <span class="incident-tag">{tag.name}</span>
+              {/each}
+            </div>
+          {/if}
+        </div>
+        
+        <footer class="incident-footer">
+          <div class="incident-meta">
+            <span class="created-date">Created {new Date(incident.created_at).toLocaleDateString()}</span>
+          </div>
+          <div class="incident-actions">
+            <button class="ai-help-btn" on:click={() => selectIncidentForAI(incident)}>
+              Ask AI
+            </button>
+            <button class="archive-btn" on:click={() => archive(incident.id)}>
+              Archive
+            </button>
+          </div>
+        </footer>
+      </article>
+    {/each}
+    
+    {#if items.length === 0}
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h3>No incidents found</h3>
+        <p>Create your first incident to get started</p>
+        <button class="empty-cta" on:click={() => (showCreate = true)}>
+          Create Incident
+        </button>
+      </div>
+    {/if}
+  </div>
+  
+  <!-- Pagination -->
+  {#if total > pageSize}
+    <div class="pagination">
+      <button 
+        class="page-btn" 
+        disabled={page <= 1}
+        on:click={() => { page--; load(); }}
+      >
+        Previous
+      </button>
+      <span class="page-info">
+        Page {page} of {Math.ceil(total / pageSize)}
+      </span>
+      <button 
+        class="page-btn" 
+        disabled={page >= Math.ceil(total / pageSize)}
+        on:click={() => { page++; load(); }}
+      >
+        Next
+      </button>
+    </div>
+  {/if}
+</section>
 
-	{#if toast}
-		<div class="toast" role="status">{toast}</div>
-	{/if}
-
-	{#if errorObj}
-		<section class="surface-card">
-			<ErrorViewer {errorObj} onRetry={loadIncidents} />
-		</section>
-	{/if}
-
-	<section class="incidents-grid">
-		{#if loading}
-			{#each Array(3) as _, index}
-				<article class="incident-card incident-card--loading" aria-busy="true"></article>
-			{/each}
-		{:else if items.length === 0}
-			<article class="surface-muted empty-state">
-				<h2>No incidents yet</h2>
-				<p>Log your first incident to begin tracking operational health.</p>
-				<button class="button-primary" on:click={() => (showCreate = true)}>Log incident</button>
-			</article>
-		{:else}
-			{#each items as incident (incident.id)}
-				<article class="incident-card surface-card">
-					<header class="incident-card__header">
-						<span class="badge {incident.status}"
-							>{statusLabels[incident.status] ?? incident.status}</span
-						>
-						<select
-							class="status-select"
-							bind:value={incident.status}
-							on:change={(event) =>
-								setStatus(
-									incident.id,
-									/** @type {'open' | 'in-progress' | 'resolved'} */ (event.currentTarget.value)
-								)}
-						>
-							{#each statusOptions as status}
-								<option value={status}>{statusLabels[status]}</option>
-							{/each}
-						</select>
-					</header>
-
-					<h3>{incident.title}</h3>
-					<p>{incident.description}</p>
-
-					{#if incident.tags?.length}
-						<ul class="tag-list">
-							{#each incident.tags as tag}
-								<li>{tag}</li>
-							{/each}
-						</ul>
-					{/if}
-
-					<footer class="incident-card__footer">
-						<div class="meta">
-							<span>#{incident.id}</span>
-							<span>Created {formatDate(incident.created_at)}</span>
-						</div>
-						<div class="actions">
-							<button class="button-secondary" on:click={() => archiveIncident(incident.id)}>
-								Archive
-							</button>
-							<button class="button-primary" on:click={() => openAiPanel(incident)}>
-								Ask ChatGPT 5 Mini
-							</button>
-						</div>
-					</footer>
-				</article>
-			{/each}
-		{/if}
-	</section>
-
-	{#if totalPages > 1}
-		<nav class="pagination" aria-label="Incident pages">
-			<button class="button-secondary" on:click={prevPage} disabled={page === 1}> Previous </button>
-			<span>Page {page} of {totalPages}</span>
-			<button class="button-secondary" on:click={nextPage} disabled={page === totalPages}>
-				Next
-			</button>
-		</nav>
-	{/if}
-</main>
-
+<!-- Create Incident Modal -->
 {#if showCreate}
-	<div class="modal-overlay" role="dialog" aria-modal="true">
-		<div class="modal surface-card">
-			<header class="modal__header">
-				<h2>Log new incident</h2>
-				<button class="close-btn" on:click={closeCreateModal} aria-label="Close">×</button>
-			</header>
-
-			<form class="modal__form" on:submit={submitCreate}>
-				<label>
-					<span>Title</span>
-					<input
-						type="text"
-						placeholder="Database latency spike in Singapore"
-						bind:value={title}
-						required
-					/>
-				</label>
-
-				<label>
-					<span>Description</span>
-					<textarea
-						rows="4"
-						placeholder="Summarise what happened, blast radius, and known impact."
-						bind:value={description}
-						required
-					></textarea>
-				</label>
-
-				<label>
-					<span>Tags</span>
-					<input type="text" placeholder="database, apac, p1" bind:value={tags} />
-					<small>Separate tags with commas.</small>
-				</label>
-
-				<footer class="modal__footer">
-					<button type="button" class="button-secondary" on:click={closeCreateModal}>
-						Cancel
-					</button>
-					<button type="submit" class="button-primary">Create incident</button>
-				</footer>
-			</form>
-		</div>
-	</div>
+  <div class="modal-overlay">
+    <div class="modal-container">
+      <header class="modal-header">
+        <h2>Create New Incident</h2>
+        <button class="close-btn" on:click={() => (showCreate = false)}>×</button>
+      </header>
+      
+      <form class="modal-form" on:submit|preventDefault={createIncident}>
+        <div class="form-group">
+          <label for="title">Incident Title</label>
+          <input 
+            id="title"
+            type="text" 
+            bind:value={title} 
+            placeholder="Enter incident title"
+            required
+          />
+        </div>
+        
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea 
+            id="description"
+            bind:value={description} 
+            placeholder="Describe the incident in detail"
+            rows="4"
+            required
+          ></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label for="tags">Tags</label>
+          <input 
+            id="tags"
+            type="text" 
+            bind:value={tags} 
+            placeholder="Enter tags separated by commas"
+          />
+          <small class="form-hint">Separate multiple tags with commas</small>
+        </div>
+        
+        <footer class="modal-footer">
+          <button type="button" class="btn-secondary" on:click={() => (showCreate = false)}>
+            Cancel
+          </button>
+          <button type="submit" class="btn-primary">
+            Create Incident
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
 {/if}
 
+<!-- AI Co-pilot Panel -->
 {#if showAiPanel && selectedIncident}
-	<div class="modal-overlay" role="dialog" aria-modal="true">
-		<div class="modal modal--wide surface-card">
-			<header class="modal__header">
-				<div>
-					<h2>ChatGPT 5 Mini co-pilot</h2>
-					<p>Incident #{selectedIncident.id}: {selectedIncident.title}</p>
-				</div>
-				<button class="close-btn" on:click={closeAiPanel} aria-label="Close">×</button>
-			</header>
+  <div class="modal-overlay">
+    <div class="ai-modal-container">
+      <header class="ai-modal-header">
+        <div>
+          <h2>AI Co-pilot</h2>
+          <p class="ai-incident-title">Analyzing: {selectedIncident.title}</p>
+        </div>
+        <button class="close-btn" on:click={() => (showAiPanel = false)}>×</button>
+      </header>
+      
+      <div class="ai-modal-content">
+        <div class="ai-interface">
+          <div class="ai-avatar-large">🤖</div>
+          <div class="ai-welcome">
+            <p>I'm ready to help you resolve incident <strong>#{selectedIncident.id}</strong>. I can generate remediation playbooks and escalation summaries based on the incident details.</p>
+          </div>
+        </div>
 
-			<section class="ai-panel">
-				<div class="ai-panel__actions">
-					<button
-						class="button-primary"
-						on:click={() => requestAi('playbook')}
-						disabled={playbookLoading}
-					>
-						{playbookLoading ? 'Generating playbook…' : 'Generate playbook'}
-					</button>
-					<button
-						class="button-secondary"
-						on:click={() => requestAi('escalation')}
-						disabled={escalationLoading}
-					>
-						{escalationLoading ? 'Drafting summary…' : 'Draft escalation'}
-					</button>
-				</div>
+        <div class="ai-actions">
+          <button 
+            type="button" 
+            class="ai-action-btn primary"
+            disabled={playbookLoading} 
+            on:click={() => requestGemini('playbook')}
+          >
+            {playbookLoading ? '🔄 Generating...' : '📋 Generate Playbook'}
+          </button>
+          <button
+            type="button"
+            class="ai-action-btn secondary"
+            disabled={escalationLoading}
+            on:click={() => requestGemini('escalation')}
+          >
+            {escalationLoading ? '🔄 Drafting...' : '📤 Draft Escalation'}
+          </button>
+        </div>
 
-				{#if aiError}
-					<ErrorViewer errorObj={aiError} />
-				{/if}
+        {#if errorObj}
+          <div class="ai-error">
+            <ErrorViewer {errorObj} onRetry={() => requestGemini('playbook')} />
+          </div>
+        {/if}
 
-				<div class="ai-panel__results">
-					<article class="surface-muted">
-						<header>
-							<h3>Remediation playbook</h3>
-						</header>
-						{#if playbookOutput}
-							<pre>{playbookOutput}</pre>
-						{:else}
-							<p class="placeholder">Run the co-pilot to generate step-by-step recovery actions.</p>
-						{/if}
-					</article>
+        <div class="ai-outputs">
+          <div class="ai-output-section">
+            <h3>Remediation Playbook</h3>
+            {#if playbookOutput}
+              <div class="ai-output-content">
+                <pre><code>{playbookOutput}</code></pre>
+              </div>
+            {:else}
+              <div class="ai-placeholder">
+                <p>Click "Generate Playbook" to get AI-powered remediation steps for this incident.</p>
+              </div>
+            {/if}
+          </div>
 
-					<article class="surface-muted">
-						<header>
-							<h3>Escalation summary</h3>
-						</header>
-						{#if escalationOutput}
-							<pre>{escalationOutput}</pre>
-						{:else}
-							<p class="placeholder">Ask for an escalation brief tailored to leadership updates.</p>
-						{/if}
-					</article>
-				</div>
-			</section>
-		</div>
-	</div>
+          <div class="ai-output-section">
+            <h3>Escalation Summary</h3>
+            {#if escalationOutput}
+              <div class="ai-output-content">
+                <pre><code>{escalationOutput}</code></pre>
+              </div>
+            {:else}
+              <div class="ai-placeholder">
+                <p>Click "Draft Escalation" to generate a summary for leadership and stakeholder communication.</p>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style>
-	.incidents-view {
-		display: flex;
-		flex-direction: column;
-		gap: 2.5rem;
-		padding: clamp(2.5rem, 6vw, 4rem) 0 clamp(4rem, 10vw, 5rem);
-		width: min(1200px, 100% - 3rem);
-		margin: 0 auto;
-	}
+  :global(body) {
+    background: linear-gradient(180deg, #0a0f1c 0%, #1e293b 100%);
+    min-height: 100vh;
+  }
 
-	.hero {
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
-		padding: clamp(2rem, 4vw, 2.75rem);
-		border-radius: var(--pw-card-radius);
-	}
+  /* Hero Header Section */
+  .hero-header {
+    position: relative;
+    background: linear-gradient(
+      135deg, 
+      rgba(15, 23, 42, 0.95) 0%, 
+      rgba(30, 41, 59, 0.9) 100%
+    );
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 3rem 2rem 2rem;
+    margin-bottom: 3rem;
+    overflow: hidden;
+  }
 
-	.hero__content {
-		display: flex;
-		gap: clamp(2rem, 4vw, 3rem);
-		align-items: flex-start;
-		justify-content: space-between;
-		flex-wrap: wrap;
-	}
+  .hero-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('/images/wideangle.jpg') center/cover no-repeat;
+    opacity: 0.1;
+    z-index: 1;
+  }
 
-	.hero__copy {
-		flex: 1 1 360px;
-		display: grid;
-		gap: 1.25rem;
-	}
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 2rem;
+  }
 
-	.hero__copy h1 {
-		margin: 0;
-		font-size: clamp(2.4rem, 4vw, 3rem);
-		letter-spacing: -0.02em;
-	}
+  .hero-text h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0 0 0.5rem;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
 
-	.hero__copy p {
-		margin: 0;
-		color: var(--pw-text-secondary);
-		font-size: 1.05rem;
-	}
+  .hero-subtitle {
+    font-size: 1.2rem;
+    color: #94a3b8;
+    margin: 0;
+    font-weight: 300;
+  }
 
-	.hero__actions {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
+  .new-incident-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    border: none;
+    border-radius: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.4);
+  }
 
-	.hero__panel {
-		flex: 0 1 320px;
-		padding: clamp(1.5rem, 3vw, 2rem);
-		border-radius: calc(var(--pw-card-radius) - 6px);
-		display: grid;
-		gap: 1.5rem;
-	}
+  .new-incident-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 40px -10px rgba(59, 130, 246, 0.6);
+  }
 
-	.panel-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-	}
+  .btn-icon {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
 
-	.panel-header h3 {
-		margin: 0;
-		font-size: 1.1rem;
-	}
+  .stats-bar {
+    position: relative;
+    z-index: 2;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.5rem;
+  }
 
-	.status-pill {
-		border-radius: 999px;
-		padding: 0.35rem 0.9rem;
-		font-size: 0.8rem;
-		font-weight: 600;
-	}
+  .stat-item {
+    text-align: center;
+    padding: 1.5rem;
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 1rem;
+    backdrop-filter: blur(10px);
+  }
 
-	.status-pill.online {
-		background: rgba(34, 197, 94, 0.15);
-		color: #86efac;
-		border: 1px solid rgba(34, 197, 94, 0.4);
-	}
+  .stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #60a5fa;
+    text-shadow: 0 2px 10px rgba(96, 165, 250, 0.3);
+  }
 
-	.stat-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 1rem;
-	}
+  .stat-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.5rem;
+  }
 
-	.stat-list li {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		padding: 0.75rem 1rem;
-		border: 1px solid rgba(148, 163, 184, 0.2);
-		border-radius: 0.85rem;
-		background: rgba(15, 23, 42, 0.55);
-	}
+  /* Main Content */
+  .incidents-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem 4rem;
+  }
 
-	.stat-list .label {
-		font-size: 0.85rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--pw-text-muted);
-	}
+  .toast {
+    padding: 1rem 1.5rem;
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1));
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    color: #fecaca;
+    margin-bottom: 2rem;
+    backdrop-filter: blur(10px);
+  }
 
-	.stat-list strong {
-		font-size: 1.4rem;
-		font-weight: 700;
-	}
+  .incidents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
 
-	.toast {
-		align-self: flex-start;
-		background: rgba(56, 189, 248, 0.16);
-		border: 1px solid rgba(56, 189, 248, 0.35);
-		color: #e0f2fe;
-		padding: 0.65rem 1rem;
-		border-radius: 0.9rem;
-		font-weight: 500;
-	}
+  .incident-card {
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.6));
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 1.5rem;
+    padding: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+  }
 
-	.incidents-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-		gap: 1.75rem;
-	}
+  .incident-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(96, 165, 250, 0.4);
+    box-shadow: 0 20px 50px -10px rgba(96, 165, 250, 0.2);
+  }
 
-	.incident-card {
-		display: grid;
-		gap: 1.25rem;
-		padding: clamp(1.5rem, 3vw, 2rem);
-		position: relative;
-		border-radius: var(--pw-card-radius);
-	}
+  .incident-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 1.5rem 0;
+  }
 
-	.incident-card--loading {
-		border: 1px solid rgba(148, 163, 184, 0.1);
-		background: linear-gradient(
-			135deg,
-			rgba(30, 41, 59, 0.4),
-			rgba(15, 23, 42, 0.5) 40%,
-			rgba(30, 41, 59, 0.4) 60%
-		);
-		background-size: 200% 200%;
-		animation: shimmer 2s infinite;
-		min-height: 220px;
-	}
+  .incident-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: #94a3b8;
+    font-weight: 600;
+  }
 
-	@keyframes shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
+  .status-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 2rem;
+    background: rgba(15, 23, 42, 0.8);
+    color: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
-	.incident-card__header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-	}
+  .status-select.open {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.1));
+    color: #86efac;
+    border-color: rgba(34, 197, 94, 0.4);
+  }
 
-	.incident-card h3 {
-		margin: 0;
-		font-size: 1.25rem;
-		letter-spacing: -0.01em;
-	}
+  .status-select.in-progress {
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(245, 158, 11, 0.1));
+    color: #fde68a;
+    border-color: rgba(250, 204, 21, 0.4);
+  }
 
-	.incident-card p {
-		margin: 0;
-		color: var(--pw-text-secondary);
-		line-height: 1.55;
-	}
+  .status-select.resolved {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.1));
+    color: #bfdbfe;
+    border-color: rgba(59, 130, 246, 0.4);
+  }
 
-	.badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.35rem 0.75rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		border: 1px solid rgba(148, 163, 184, 0.3);
-	}
+  .incident-body {
+    padding: 1.5rem;
+  }
 
-	.badge.open {
-		background: rgba(248, 113, 113, 0.16);
-		color: #fecaca;
-		border-color: rgba(248, 113, 113, 0.4);
-	}
+  .incident-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0 0 1rem;
+    line-height: 1.4;
+  }
 
-	.badge.in-progress {
-		background: rgba(251, 191, 36, 0.18);
-		color: #fde68a;
-		border-color: rgba(251, 191, 36, 0.4);
-	}
+  .incident-description {
+    color: #cbd5e1;
+    margin: 0 0 1rem;
+    line-height: 1.6;
+  }
 
-	.badge.resolved {
-		background: rgba(34, 197, 94, 0.18);
-		color: #bbf7d0;
-		border-color: rgba(34, 197, 94, 0.45);
-	}
+  .tag-cloud {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
 
-	.status-select {
-		border-radius: 0.75rem;
-		border: 1px solid rgba(148, 163, 184, 0.35);
-		background: rgba(15, 23, 42, 0.65);
-		color: var(--pw-text-primary);
-		padding: 0.45rem 0.85rem;
-		font-size: 0.85rem;
-	}
+  .incident-tag {
+    padding: 0.3rem 0.8rem;
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(100, 116, 139, 0.1));
+    color: #cbd5e1;
+    border-radius: 1rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
 
-	.tag-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
+  .incident-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem 1.5rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+  }
 
-	.tag-list li {
-		border-radius: 0.75rem;
-		padding: 0.3rem 0.7rem;
-		background: rgba(96, 165, 250, 0.14);
-		color: #dbeafe;
-		border: 1px solid rgba(96, 165, 250, 0.35);
-		font-size: 0.75rem;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-	}
+  .incident-meta {
+    font-size: 0.85rem;
+    color: #94a3b8;
+  }
 
-	.incident-card__footer {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 1rem;
-	}
+  .archive-btn {
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(100, 116, 139, 0.1));
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
-	.meta {
-		display: flex;
-		gap: 1rem;
-		font-size: 0.85rem;
-		color: var(--pw-text-muted);
-	}
+  .archive-btn:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1));
+    color: #fecaca;
+    border-color: rgba(239, 68, 68, 0.4);
+  }
 
-	.actions {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
+  /* Empty State */
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 4rem 2rem;
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.4));
+    border: 2px dashed rgba(148, 163, 184, 0.3);
+    border-radius: 2rem;
+    backdrop-filter: blur(10px);
+  }
 
-	.pagination {
-		display: flex;
-		justify-content: center;
-		gap: 1.25rem;
-		align-items: center;
-		color: var(--pw-text-secondary);
-	}
+  .empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
 
-	.empty-state {
-		text-align: center;
-		padding: 3rem;
-		border-radius: var(--pw-card-radius);
-	}
+  .empty-state h3 {
+    font-size: 1.5rem;
+    color: #f8fafc;
+    margin: 0 0 0.5rem;
+  }
 
-	.empty-state h2 {
-		margin: 0 0 0.75rem;
-	}
+  .empty-state p {
+    color: #94a3b8;
+    margin: 0 0 2rem;
+  }
 
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(5, 11, 24, 0.7);
-		display: grid;
-		place-items: center;
-		padding: 1.5rem;
-		z-index: 100;
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-	}
+  .empty-cta {
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    border: none;
+    border-radius: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
 
-	.modal {
-		width: min(540px, 100%);
-		border-radius: var(--pw-card-radius);
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-		padding: clamp(1.75rem, 4vw, 2.5rem);
-	}
+  .empty-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.4);
+  }
 
-	.modal--wide {
-		width: min(900px, 100%);
-	}
+  /* Pagination */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem 0;
+  }
 
-	.modal__header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: 1.5rem;
-	}
+  .page-btn {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
-	.modal__header h2 {
-		margin: 0;
-	}
+  .page-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-color: rgba(59, 130, 246, 0.4);
+  }
 
-	.modal__header p {
-		margin: 0;
-		color: var(--pw-text-muted);
-	}
+  .page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
-	.close-btn {
-		border: none;
-		background: transparent;
-		color: var(--pw-text-muted);
-		font-size: 1.5rem;
-		cursor: pointer;
-	}
+  .page-info {
+    color: #94a3b8;
+    font-weight: 500;
+  }
 
-	.modal__form {
-		display: grid;
-		gap: 1.25rem;
-	}
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+  }
 
-	.modal__form label {
-		display: grid;
-		gap: 0.5rem;
-		font-weight: 600;
-	}
+  .modal-container {
+    background: linear-gradient(145deg, #0f172a, #1e293b);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 1.5rem;
+    width: min(90vw, 600px);
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
 
-	.modal__form input,
-	.modal__form textarea {
-		border-radius: 0.85rem;
-		border: 1px solid rgba(148, 163, 184, 0.35);
-		background: rgba(15, 23, 42, 0.65);
-		color: var(--pw-text-primary);
-		padding: 0.75rem 1rem;
-		font-weight: 500;
-	}
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem 2rem 1rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
 
-	.modal__form small {
-		font-weight: 400;
-		color: var(--pw-text-muted);
-	}
+  .modal-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+  }
 
-	.modal__footer {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.75rem;
-	}
+  .close-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: none;
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
-	.ai-panel {
-		display: grid;
-		gap: 1.5rem;
-	}
+  .close-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
+  }
 
-	.ai-panel__actions {
-		display: flex;
-		gap: 1rem;
-		flex-wrap: wrap;
-	}
+  .modal-form {
+    padding: 2rem;
+  }
 
-	.ai-panel__results {
-		display: grid;
-		gap: 1.5rem;
-	}
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
 
-	.ai-panel__results article {
-		display: grid;
-		gap: 1rem;
-		padding: clamp(1.25rem, 3vw, 1.75rem);
-		border-radius: calc(var(--pw-card-radius) - 6px);
-	}
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 0.5rem;
+  }
 
-	.ai-panel__results h3 {
-		margin: 0;
-		font-size: 1.05rem;
-	}
+  .form-group input,
+  .form-group textarea {
+    width: 100%;
+    padding: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 0.75rem;
+    background: rgba(15, 23, 42, 0.8);
+    color: #e2e8f0;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+  }
 
-	.placeholder {
-		margin: 0;
-		color: var(--pw-text-muted);
-	}
+  .form-group input:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
 
-	pre {
-		margin: 0;
-		font-family: 'JetBrains Mono', 'Fira Code', monospace;
-		font-size: 0.85rem;
-		line-height: 1.6;
-		white-space: pre-wrap;
-		word-break: break-word;
-	}
+  .form-hint {
+    display: block;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin-top: 0.25rem;
+  }
 
-	@media (max-width: 960px) {
-		.hero__content {
-			flex-direction: column;
-		}
+  .modal-footer {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+  }
 
-		.hero__panel,
-		.hero__copy {
-			width: 100%;
-		}
+  .btn-primary,
+  .btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
 
-		.modal--wide {
-			max-height: 90vh;
-			overflow: auto;
-		}
-	}
+  .btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+  }
 
-	@media (max-width: 640px) {
-		.incidents-view {
-			width: min(100%, 100% - 2rem);
-		}
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+  }
 
-		.hero__actions,
-		.actions,
-		.ai-panel__actions {
-			flex-direction: column;
-			align-items: stretch;
-		}
+  .btn-secondary {
+    background: rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.3);
+  }
 
-		.stat-list li {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.35rem;
-		}
-	}
+  .btn-secondary:hover {
+    background: rgba(148, 163, 184, 0.3);
+  }
+
+  /* AI Co-pilot Styles */
+  .incident-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .ai-help-btn {
+    background: linear-gradient(135deg, #34d399, #10b981);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+  }
+
+  .ai-help-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+  }
+
+  .ai-modal-container {
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95));
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 2rem;
+    max-width: 1000px;
+    width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .ai-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 2rem 2rem 1rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .ai-modal-header h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0 0 0.5rem;
+  }
+
+  .ai-incident-title {
+    color: #94a3b8;
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .ai-modal-content {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .ai-interface {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    padding: 1.5rem;
+    background: rgba(30, 41, 59, 0.6);
+    border-radius: 1.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .ai-avatar-large {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    flex-shrink: 0;
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+  }
+
+  .ai-welcome {
+    flex: 1;
+  }
+
+  .ai-welcome p {
+    color: #cbd5e1;
+    line-height: 1.6;
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .ai-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .ai-action-btn {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 1rem;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    min-width: 200px;
+  }
+
+  .ai-action-btn.primary {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    color: white;
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+  }
+
+  .ai-action-btn.primary:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(59, 130, 246, 0.4);
+  }
+
+  .ai-action-btn.secondary {
+    background: linear-gradient(135deg, #34d399, #10b981);
+    color: white;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+  }
+
+  .ai-action-btn.secondary:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(16, 185, 129, 0.4);
+  }
+
+  .ai-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .ai-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 1rem;
+    padding: 1rem;
+  }
+
+  .ai-outputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+
+  .ai-output-section {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .ai-output-section h3 {
+    color: #f8fafc;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ai-output-content {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .ai-output-content pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #e2e8f0;
+    line-height: 1.6;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.9rem;
+  }
+
+  .ai-placeholder {
+    text-align: center;
+    padding: 2rem;
+    color: #94a3b8;
+  }
+
+  .ai-placeholder p {
+    margin: 0;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .hero-content {
+      flex-direction: column;
+      gap: 2rem;
+      align-items: stretch;
+    }
+
+    .hero-text h1 {
+      font-size: 2rem;
+    }
+
+    .stats-bar {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .incidents-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .incident-footer {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: stretch;
+    }
+
+    .incident-actions {
+      flex-direction: column;
+    }
+
+    .modal-container,
+    .ai-modal-container {
+      margin: 1rem;
+      width: calc(100vw - 2rem);
+    }
+
+    .modal-header,
+    .modal-form,
+    .ai-modal-content {
+      padding: 1.5rem;
+    }
+
+    .ai-outputs {
+      grid-template-columns: 1fr;
+    }
+
+    .ai-actions {
+      flex-direction: column;
+    }
+
+    .ai-interface {
+      flex-direction: column;
+      text-align: center;
+    }
+  }
 </style>
