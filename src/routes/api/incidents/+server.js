@@ -535,21 +535,26 @@ async function callChatCompletion(messages, responseFormat) {
 	const normalizedEndpoint = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
 	const requestUrl = `${normalizedEndpoint}/deployments/${deployment}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
 
+	const payload = {
+		model,
+		messages,
+		...(responseFormat && { response_format: responseFormat })
+	};
+
 	const response = await fetch(requestUrl, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			'api-key': env.AZURE_OPENAI_KEY
 		},
-		body: JSON.stringify({ model, messages, response_format: responseFormat })
+		body: JSON.stringify(payload)
 	});
 
 	if (!response.ok) {
-		const errorText = await response.text().catch(() => '');
-		throw new Error(`Azure OpenAI request failed (${response.status}): ${errorText}`);
+		console.error('Azure OpenAI API error:', response.status, await response.text());
+		return null;
 	}
 
 	const data = await response.json();
-	const content = data?.choices?.[0]?.message?.content;
-	return typeof content === 'string' ? content.trim() : null;
+	return data.choices?.[0]?.message?.content ?? null;
 }
