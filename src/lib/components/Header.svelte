@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import ThemeToggle from './ThemeToggle.svelte';
+  
   /** @type {{ id:number, email:string, name:string } | null} */
   let user = null;
   let openCount = 0;
@@ -19,7 +21,7 @@
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     await refresh();
-    window.location.href = '/login';
+    window.location.href = '/';
   }
 
   onMount(refresh);
@@ -27,23 +29,29 @@
 
 <header class="site-header">
   <div class="brand">
-    <a href="/" aria-label="Portwarden AI home">Portwarden AI</a>
+    <a href={user ? '/dashboard' : '/'} aria-label="Portwarden AI home">Portwarden AI</a>
   </div>
   <nav class="nav" aria-label="Primary">
-    <a href="/" class:active={$page.url.pathname === '/'}>Home</a>
-    <a href="/incidents" class:active={$page.url.pathname === '/incidents'}>Incidents</a>
-    <a href="/archive" class:active={$page.url.pathname === '/archive'}>Archive</a>
+    {#if user}
+      <a href="/dashboard" class:active={$page.url.pathname.startsWith('/dashboard')}>Monitor</a>
+      <a href="/incidents" class:active={$page.url.pathname.startsWith('/incidents')}>Incidents</a>
+      <a href="/archive" class:active={$page.url.pathname.startsWith('/archive')}>Archive</a>
+    {:else}
+      <a href="/" class:active={$page.url.pathname === '/'}>Home</a>
+      <a href="/demo" class:active={$page.url.pathname.startsWith('/demo')}>Demo</a>
+    {/if}
   </nav>
   <div class="status">
-    <span class="pill" title="Open incidents">Open: {openCount}</span>
+    <ThemeToggle size="sm" />
     {#if user}
+      <span class="pill" title="Open incidents">Open: {openCount}</span>
       <span class="user" title={user.email}>
   <span class="avatar">{user.name?.split(' ').map((p)=>p[0]).join('').slice(0,2).toUpperCase()}</span>
         <span class="name">{user.name}</span>
       </span>
       <button class="link" on:click={logout}>Logout</button>
     {:else}
-      <a class="link" href="/login">Login</a>
+      <a class="link" href="/login">Sign In</a>
     {/if}
   </div>
 </header>
@@ -56,38 +64,90 @@
     gap: 2rem; 
     padding: 1.25rem 2rem; 
     background: rgba(15,23,42,0.85); 
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--maritime-blur, blur(10px));
     position: sticky; 
     top: 0; 
     z-index: 10; 
+    transition: var(--maritime-transition);
+    border-bottom: 1px solid var(--maritime-border-light);
   }
+  
+  :global(html.light) .site-header {
+    background: rgba(248,250,252,0.85);
+    border-bottom: 1px solid var(--maritime-border);
+  }
+  
   .brand a { 
     font-weight: 800; 
     letter-spacing: 0.02em; 
     font-size: 1.2rem;
-    color: #f8fafc;
+    color: var(--maritime-text-primary);
     text-decoration: none;
+    transition: color 0.3s ease;
   }
+  
+  /* Force light theme colors */
+  :global(html.light) .brand a {
+    color: #0f172a !important;
+  }
+  
   .nav { 
     display: flex; 
     gap: 2rem; 
   }
   .nav a { 
-    color: #cbd5f5; 
+    color: var(--maritime-text-secondary); 
     transition: all 0.2s ease; 
     padding: 0.5rem 0;
     font-weight: 500;
     position: relative;
     text-decoration: none;
   }
+  
+  /* Force light theme colors for nav */
+  :global(html.light) .nav a {
+    color: #1e293b !important;
+  }
   .nav a:hover { 
-    color: #f8fafc; 
+    color: var(--maritime-text-primary); 
     transform: translateY(-1px);
   }
+  
+  /* Force light theme hover colors */
+  :global(html.light) .nav a:hover {
+    color: #0f172a !important;
+  }
+  
   .nav a.active { 
-    color: #60a5fa; 
+    color: var(--maritime-accent); 
     font-weight: 600; 
   }
+  
+  /* Force light theme active colors */
+  :global(html.light) .nav a.active {
+    color: #3b82f6 !important;
+  }
+  /* Additional strong theme enforcement */
+  :global(html.light) .site-header .brand a {
+    color: #0f172a !important;
+  }
+  
+  :global(html.light) .site-header .nav a {
+    color: #1e293b !important;
+  }
+  
+  :global(html.light) .site-header .nav a:hover {
+    color: #0f172a !important;
+  }
+  
+  :global(html.light) .site-header .nav a.active {
+    color: #3b82f6 !important;
+  }
+  
+  :global(html.light) .site-header .name {
+    color: #1e293b !important;
+  }
+
   .nav a.active::after {
     content: '';
     position: absolute;
@@ -95,8 +155,9 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, #60a5fa, #3b82f6);
+    background: linear-gradient(90deg, var(--maritime-accent, #60a5fa), var(--maritime-accent-secondary, #3b82f6));
     border-radius: 1px;
+    transition: var(--maritime-transition);
   }
   .status { 
     display: flex; 
@@ -105,13 +166,20 @@
   }
   .pill { 
     background: rgba(59,130,246,0.18); 
-    color: #bfdbfe; 
+    color: var(--maritime-accent, #bfdbfe); 
     border: 1px solid rgba(59,130,246,0.35); 
     padding: 0.25rem 0.75rem; 
     border-radius: 999px; 
     font-size: 0.85rem; 
     font-weight: 500;
+    transition: all 0.3s ease;
   }
+  
+  :global(html.light) .pill {
+    background: rgba(59,130,246,0.1);
+    color: var(--maritime-accent, #3b82f6);
+  }
+  
   .avatar { 
     display: inline-flex; 
     align-items: center; 
@@ -119,20 +187,34 @@
     width: 28px; 
     height: 28px; 
     border-radius: 50%; 
-    background: #1f2937; 
+    background: var(--maritime-bg-tertiary, #1f2937); 
     border: 1px solid rgba(148,163,184,0.3); 
     font-size: 0.8rem; 
     margin-right: 0.5rem; 
+    transition: background-color 0.3s ease;
   }
+  
+  :global(html.light) .avatar {
+    background: var(--maritime-bg-secondary, #f1f5f9);
+    color: var(--maritime-text-primary, #0f172a);
+  }
+  
   .name { 
-    color: #e5e7eb; 
+    color: var(--maritime-text-secondary, #e5e7eb); 
     font-weight: 500;
+    transition: color 0.3s ease;
+  }
+  
+  /* Force light theme name color */
+  :global(html.light) .name {
+    color: #1e293b !important;
   }
   .link { 
     background: none; 
-    color: #93c5fd; 
+    color: var(--maritime-accent, #93c5fd); 
     border: none; 
     cursor: pointer; 
+    transition: color 0.3s ease; 
     padding: 0.5rem 0.75rem; 
     border-radius: 0.375rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -148,19 +230,25 @@
   
   .link:hover {
     background: rgba(59,130,246,0.1);
-    color: #bfdbfe;
+    color: var(--maritime-accent-light, #bfdbfe);
     transform: translateY(-1px);
   }
 
   /* Special styling for login link when user is not authenticated */
   .link[href="/login"] {
     background: linear-gradient(135deg, #60a5fa, #3b82f6);
-    color: white;
+    color: var(--maritime-text-primary, white);
     font-weight: 600;
     padding: 0.75rem 1.5rem;
     border-radius: 0.75rem;
     border: 1px solid rgba(96, 165, 250, 0.3);
     box-shadow: 0 4px 15px -4px rgba(59, 130, 246, 0.25);
+    transition: color 0.3s ease;
+  }
+  
+  /* Login button should stay white on blue background in both themes */
+  .link[href="/login"] {
+    color: white !important;
   }
 
   .link[href="/login"]::before {
@@ -180,9 +268,10 @@
 
   .link[href="/login"]:hover {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
+    color: white !important;
     transform: translateY(-2px);
     box-shadow: 0 8px 25px -8px rgba(59, 130, 246, 0.4);
+    transition: color 0.3s ease;
   }
 
   /* Mobile Responsive Styles */

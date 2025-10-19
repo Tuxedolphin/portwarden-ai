@@ -22,6 +22,13 @@ export async function load(event) {
 		'/static',
 		'/stories'
 	];
+	
+	// Root landing page is also public
+	if (pathname === '/') {
+		const sid = event.cookies.get(sessionCookieName) || '';
+		const { user } = await validateSession(sid);
+		return { user };
+	}
 	if (publicPrefixes.some((p) => pathname.startsWith(p))) {
 		// still expose user when available so header can show login state
 		const sid = event.cookies.get(sessionCookieName) || '';

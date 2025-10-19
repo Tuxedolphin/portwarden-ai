@@ -5,8 +5,11 @@ import adapter from '@sveltejs/adapter-vercel';
 const config = {
 	kit: { 
 		adapter: adapter({
-			runtime: 'nodejs24.x'
-		})
+			runtime: 'nodejs22.x'
+		}),
+		alias: {
+			"@/*": "./src/lib/*",
+		}
 	},
 	preprocess: [mdsvex()],
 	extensions: ['.svelte', '.svx']

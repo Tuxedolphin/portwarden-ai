@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth.js';
 import { incidents } from '$lib/data/incidents.js';
+import { incidentStatusStore } from '$lib/server/incidentStore.js';
 
 /**
  * @type {import('@sveltejs/kit').RequestHandler}
@@ -22,6 +23,11 @@ export async function PATCH(event) {
 
 		if (!incident) {
 			throw error(404, 'Incident not found');
+		}
+
+		// Store the status change in our in-memory store
+		if (status) {
+			incidentStatusStore.set(incidentId, status);
 		}
 
 		// Return a mock updated incident
