@@ -1,11 +1,14 @@
 <script>
+	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
-	let mode = 'login';
+	import { Button } from '$lib/components/ui';
+
 	let email = '';
 	let password = '';
 	let name = '';
-	let toast = '';
+	let mode = 'login';
 	let loading = false;
+	let toast = '';
 
 	async function submit() {
 		toast = '';
@@ -23,7 +26,7 @@
 			});
 			const data = await res.json();
 			if (!res.ok) throw new Error(data?.error || 'Authentication failed');
-			window.location.href = '/';
+			window.location.href = '/dashboard';
 		} catch (e) {
 			toast = e instanceof Error ? e.message : 'Authentication error';
 		} finally {
@@ -101,31 +104,30 @@
 				/>
 			</div>
 
-			<button type="submit" class="auth-button" disabled={loading}>
-				{#if loading}
-					<div class="spinner"></div>
-					<span>Processing...</span>
-				{:else}
-					<span>{mode === 'login' ? 'Sign In' : 'Create Account'}</span>
-					<svg class="button-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-						<path d="M5 12h14M12 5l7 7-7 7" />
-					</svg>
-				{/if}
-			</button>
+			<Button 
+				type="submit" 
+				class="w-full mt-2" 
+				size="lg"
+				{loading}
+			>
+				{mode === 'login' ? 'Sign In' : 'Create Account'}
+			</Button>
 		</form>
 
 		<div class="auth-toggle">
 			{#if mode === 'login'}
 				<p>
 					Don't have an account?
-					<button class="toggle-link" on:click={() => (mode = 'register')}>
+					<Button variant="link" class="p-0 h-auto text-blue-400" onclick={() => (mode = 'register')}>
 						Create one here
-					</button>
+					</Button>
 				</p>
 			{:else}
 				<p>
 					Already have an account?
-					<button class="toggle-link" on:click={() => (mode = 'login')}> Sign in instead </button>
+					<Button variant="link" class="p-0 h-auto text-blue-400" onclick={() => (mode = 'login')}>
+						Sign in instead
+					</Button>
 				</p>
 			{/if}
 		</div>
@@ -137,20 +139,6 @@
 </main>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family:
-			'Inter',
-			system-ui,
-			-apple-system,
-			BlinkMacSystemFont,
-			'Segoe UI',
-			sans-serif;
-		background: #0a0f1c;
-		color: #f8fafc;
-		overflow-x: hidden;
-	}
-
 	.auth-background {
 		position: fixed;
 		top: 0;
@@ -200,6 +188,15 @@
 		animation: slideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 		position: relative;
 		overflow: hidden;
+		transition: all 0.3s ease;
+	}
+	
+	:global(html.light) .auth-card {
+		background: linear-gradient(145deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.8));
+		border: 1px solid rgba(148, 163, 184, 0.3);
+		box-shadow:
+			0 25px 50px -12px rgba(0, 0, 0, 0.1),
+			0 0 0 1px rgba(96, 165, 250, 0.2);
 	}
 
 	.auth-card::before {
@@ -209,7 +206,7 @@
 		left: 0;
 		right: 0;
 		height: 4px;
-		background: linear-gradient(90deg, #60a5fa, #34d399, #fbbf24);
+		background: linear-gradient(90deg, var(--maritime-accent, #60a5fa), var(--maritime-accent-secondary, #34d399), #fbbf24);
 	}
 
 	@keyframes slideUp {
@@ -232,20 +229,22 @@
 		font-size: 2.5rem;
 		font-weight: 800;
 		margin: 0 0 1rem;
-		background: linear-gradient(135deg, #60a5fa, #34d399);
+		background: linear-gradient(135deg, var(--maritime-accent, #60a5fa), var(--maritime-accent-secondary, #34d399));
 		background-clip: text;
 		-webkit-background-clip: text;
 		color: transparent;
 		text-shadow: 0 0 40px rgba(96, 165, 250, 0.3);
 		letter-spacing: -0.02em;
+		transition: all 0.3s ease;
 	}
 
 	.auth-subtitle {
 		font-size: 1.1rem;
-		color: #94a3b8;
+		color: var(--maritime-text-muted, #94a3b8);
 		margin: 0;
 		line-height: 1.6;
 		font-weight: 400;
+		transition: color 0.3s ease;
 	}
 
 	.toast {
@@ -253,7 +252,7 @@
 		border-radius: 1rem;
 		background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.15));
 		border: 1px solid rgba(248, 113, 113, 0.3);
-		color: #fecaca;
+		color: var(--maritime-status-critical, #fecaca);
 		margin-bottom: 1.5rem;
 		font-weight: 500;
 		animation: fadeIn 0.3s ease;
@@ -287,8 +286,14 @@
 	.input-group label {
 		font-size: 0.95rem;
 		font-weight: 600;
-		color: #e2e8f0;
+		color: var(--maritime-text-secondary, #e2e8f0);
 		letter-spacing: 0.02em;
+		transition: color 0.3s ease;
+	}
+	
+	/* Force light theme label color */
+	:global(html.light) .input-group label {
+		color: #1e293b !important;
 	}
 
 	.input-group input {
@@ -296,107 +301,38 @@
 		border-radius: 1rem;
 		border: 1px solid rgba(148, 163, 184, 0.25);
 		background: rgba(15, 23, 42, 0.8);
-		color: #f8fafc;
+		color: var(--maritime-text-primary, #f8fafc);
 		font-size: 1rem;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 		backdrop-filter: blur(10px);
 	}
+	
+	:global(html.light) .input-group input {
+		background: rgba(248, 250, 252, 0.8);
+		border: 1px solid rgba(148, 163, 184, 0.4);
+		color: #0f172a !important;
+	}
 
 	.input-group input:focus {
 		outline: none;
-		border-color: #60a5fa;
+		border-color: var(--maritime-accent, #60a5fa);
 		background: rgba(15, 23, 42, 0.95);
 		box-shadow:
 			0 0 0 3px rgba(96, 165, 250, 0.1),
 			0 10px 25px -10px rgba(96, 165, 250, 0.2);
 		transform: translateY(-2px);
 	}
+	
+	:global(html.light) .input-group input:focus {
+		background: rgba(248, 250, 252, 0.95);
+	}
 
 	.input-group input::placeholder {
-		color: #64748b;
+		color: var(--maritime-text-muted, #64748b);
+		transition: color 0.3s ease;
 	}
 
-	.auth-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.75rem;
-		padding: 1.25rem 2rem;
-		border-radius: 1rem;
-		border: none;
-		background: linear-gradient(135deg, #60a5fa, #3b82f6);
-		color: white;
-		font-size: 1.1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		position: relative;
-		overflow: hidden;
-		margin-top: 0.5rem;
-	}
-
-	.auth-button::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: -100%;
-		width: 100%;
-		height: 100%;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-		transition: left 0.5s ease;
-	}
-
-	.auth-button:hover::before {
-		left: 100%;
-	}
-
-	.auth-button:hover {
-		transform: translateY(-3px);
-		box-shadow:
-			0 20px 40px -15px rgba(59, 130, 246, 0.4),
-			0 0 0 1px rgba(96, 165, 250, 0.3);
-		background: linear-gradient(135deg, #3b82f6, #2563eb);
-	}
-
-	.auth-button:active {
-		transform: translateY(-1px);
-	}
-
-	.auth-button:disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
-		transform: none;
-	}
-
-	.auth-button:disabled:hover {
-		transform: none;
-		box-shadow: none;
-	}
-
-	.spinner {
-		width: 20px;
-		height: 20px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top: 2px solid white;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.button-arrow {
-		width: 20px;
-		height: 20px;
-		transition: transform 0.3s ease;
-	}
-
-	.auth-button:hover .button-arrow {
-		transform: translateX(4px);
-	}
+	/* Button styles now handled by Button component */
 
 	.auth-toggle {
 		text-align: center;
@@ -407,28 +343,12 @@
 
 	.auth-toggle p {
 		margin: 0;
-		color: #94a3b8;
+		color: var(--maritime-text-muted, #94a3b8);
 		font-size: 0.95rem;
+		transition: color 0.3s ease;
 	}
 
-	.toggle-link {
-		background: none;
-		border: none;
-		color: #60a5fa;
-		cursor: pointer;
-		font-weight: 600;
-		font-size: inherit;
-		transition: all 0.3s ease;
-		text-decoration: underline;
-		text-decoration-color: transparent;
-		text-underline-offset: 4px;
-	}
-
-	.toggle-link:hover {
-		color: #34d399;
-		text-decoration-color: #34d399;
-		transform: translateY(-1px);
-	}
+	/* Toggle link styles now handled by Button component */
 
 	.auth-footer {
 		text-align: center;
@@ -439,9 +359,10 @@
 
 	.auth-footer p {
 		margin: 0;
-		color: #64748b;
+		color: var(--maritime-text-muted, #64748b);
 		font-size: 0.85rem;
 		font-weight: 500;
+		transition: color 0.3s ease;
 	}
 
 	/* Mobile Responsive */
@@ -467,25 +388,15 @@
 			padding: 0.875rem 1rem;
 		}
 
-		.auth-button {
-			padding: 1rem 1.5rem;
-			font-size: 1rem;
-		}
 	}
 
 	/* Accessibility */
 	@media (prefers-reduced-motion: reduce) {
 		.auth-card,
 		.toast,
-		.input-group input,
-		.auth-button,
-		.toggle-link {
+		.input-group input {
 			animation: none;
 			transition: none;
-		}
-
-		.spinner {
-			animation: none;
 		}
 	}
 </style>

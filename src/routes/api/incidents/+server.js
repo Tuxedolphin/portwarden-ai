@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { incidents } from '$lib/data/incidents.js';
 import { requireUser } from '$lib/server/auth';
+import { incidentStatusStore } from '$lib/server/incidentStore.js';
 
 export async function GET(event) {
 	const url = new URL(event.request.url);
@@ -10,14 +11,25 @@ export async function GET(event) {
 
 	// Use mock data instead of database
 	const total = incidents.length;
-	const results = incidents.slice(offset, offset + pageSize).map((incident) => ({
-		id: incident.id,
-		title: incident.title,
-		description: incident.summary, // Use summary as description
-		status: 'open', // Default status since mock data doesn't have this
-		created_at: incident.occurredAt,
-		tags: [] // Mock empty tags for now
-	}));
+	const results = incidents.slice(offset, offset + pageSize).map((incident, index) => {
+		// Check if we have a stored status, otherwise use default variety
+		let status = incidentStatusStore.get(incident.id);
+		if (!status) {
+			// Add some variety to status based on incident index for demo purposes
+			if (index % 3 === 1) status = 'in-progress';
+			else if (index % 3 === 2) status = 'resolved';
+			else status = 'open';
+		}
+		
+		return {
+			id: incident.id,
+			title: incident.title,
+			description: incident.summary, // Use summary as description
+			status: status,
+			created_at: incident.occurredAt,
+			tags: [] // Mock empty tags for now
+		};
+	});
 
 	return json({ total, results });
 }
