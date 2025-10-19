@@ -2,21 +2,69 @@
   "articles": {
     "CNTR: Duplicate Container information received": {
       "title": "CNTR: Duplicate Container information received",
-      "accessCount": 36,
+      "accessCount": 46,
       "contexts": {
-        "playbook_generation": 31,
-        "escalation_generation": 5
+        "playbook_generation": 32,
+        "escalation_generation": 14
       },
       "effectiveness": 0,
       "resolutionCorrelation": [],
       "firstAccessed": "2025-10-18T03:07:29.364Z",
-      "lastAccessed": "2025-10-19T10:09:31.497Z"
+      "lastAccessed": "2025-10-19T10:37:31.195Z"
+    },
+    "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice": {
+      "title": "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice",
+      "accessCount": 2,
+      "contexts": {
+        "playbook_generation": 1,
+        "escalation_generation": 1
+      },
+      "effectiveness": 0,
+      "resolutionCorrelation": [],
+      "firstAccessed": "2025-10-19T10:38:08.607Z",
+      "lastAccessed": "2025-10-19T10:38:09.243Z"
+    },
+    "Check for active berth applications before expiring advice": {
+      "title": "Check for active berth applications before expiring advice",
+      "accessCount": 2,
+      "contexts": {
+        "playbook_generation": 1,
+        "escalation_generation": 1
+      },
+      "effectiveness": 0,
+      "resolutionCorrelation": [],
+      "firstAccessed": "2025-10-19T10:38:08.608Z",
+      "lastAccessed": "2025-10-19T10:38:09.245Z"
+    },
+    "Expire vessel advice via SQL maintenance window": {
+      "title": "Expire vessel advice via SQL maintenance window",
+      "accessCount": 2,
+      "contexts": {
+        "playbook_generation": 1,
+        "escalation_generation": 1
+      },
+      "effectiveness": 0,
+      "resolutionCorrelation": [],
+      "firstAccessed": "2025-10-19T10:38:08.609Z",
+      "lastAccessed": "2025-10-19T10:38:09.246Z"
+    },
+    "BAPLIE inconsistency for vessel plan": {
+      "title": "BAPLIE inconsistency for vessel plan",
+      "accessCount": 2,
+      "contexts": {
+        "escalation_generation": 1,
+        "playbook_generation": 1
+      },
+      "effectiveness": 0,
+      "resolutionCorrelation": [],
+      "firstAccessed": "2025-10-19T10:39:09.090Z",
+      "lastAccessed": "2025-10-19T10:39:09.532Z"
     }
   },
   "summary": {
     "totalArticles": 0,
-    "totalUsage": 36,
+    "totalUsage": 54,
     "avgEffectiveness": 0,
-    "lastUpdated": "2025-10-19T10:09:31.497Z"
+    "lastUpdated": "2025-10-19T10:39:09.532Z"
   }
 }

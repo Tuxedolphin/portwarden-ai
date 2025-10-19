@@ -137,12 +137,12 @@ function buildPrompt(incident, intent, sessionId) {
 	const intentInstruction =
 		intent === 'playbook'
 			? `Respond strictly in JSON using these top-level keys:
-	- importantSafetyNotes: array of safety-critical callouts (strings only).
-	- actionSteps: ordered array where each object contains stepTitle, executionContext (note exactly where the work runs), procedure (array of concise instructions).
-	- languageCommands: array of objects with language (e.g. "sql", "bash", "api") and command (exact string, no markdown fences).
-	- checklists: array of objects with title and items (array of checklist bullet strings, include a "Ready to close" list when relevant).
-	Do not include any markdown or commentary outside the JSON object.`
-			: 'Draft escalation summary <180 words: incident snapshot, mitigation, risks, ask, timeline.';
+		- importantSafetyNotes: array of safety-critical callouts (strings only).
+		- actionSteps: ordered array where each object contains stepTitle, executionContext (note exactly where the work runs), procedure (array of concise instructions).
+		- languageCommands: array of objects with language (e.g. "sql", "bash", "api") and command (exact string, no markdown fences).
+		- checklists: array of objects with title and items (array of checklist bullet strings, include a "Ready to close" list when relevant).
+		Do not include any markdown or commentary outside the JSON object.`
+			: 'Draft escalation summary <180 words in a single paragraph. Do not use bullets, numbered lists, headers, or any content after the paragraph.';
 
 	// Compact prompt structure
 	return [

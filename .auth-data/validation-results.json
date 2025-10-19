@@ -532,13 +532,648 @@
       },
       "overallScore": 86,
       "passed": true
+    },
+    "CNTR_1740787713_1760869132794": {
+      "testId": "CNTR_1740787713_1760869132794",
+      "timestamp": "2025-10-19T10:18:52.794Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Action Steps (numbered, with where each action runs)\n\n1) Confirm duplicate snapshots (Database / DB console)\n   - Run a read-only query to list all rows for cntr_no = 'CMAU0000020' and their timestamps (example: SELECT id, cntr_no, snapshot_ts, status, created_at FROM container_snapshots WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC;).\n   - Evidence to check: container_service.log WARN entries (DuplicateSnapshotAttempt) and the DB file showing two rows with same timestamps.\n   - KB: follow detection guidance in [KB-2210] (CNTR-024). Related: [KB-1749].\n\n2) Take a DB backup / create restore point (Shell / Database backup)\n   - Before any write operation, create a backup or transactionally-safe restore point (e.g., pg_dump or DB-specific snapshot) to allow rollback.\n   - Run from shell/DB admin console and store backup in secured archive.\n\n3) Retain most-recent snapshot; archive older duplicates (Database / DB console)\n   - Using the backup in place, archive older rows rather than hard-delete. Example SQL pattern:\n     - Identify the most recent id: WITH latest AS (SELECT id FROM container_snapshots WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC, id DESC LIMIT 1)\n     - Archive others: UPDATE container_snapshots SET status='archived', archived_at=NOW() WHERE cntr_no='CMAU0000020' AND id NOT IN (SELECT id FROM latest);\n   - If policy requires moving rows, INSERT older rows into container_snapshots_archive and DELETE from primary table.\n   - Log the operation and reference [KB-2210] for retention rules and archival fields.\n\n4) Validate inventory and consistency (Database + API / DB console + API)\n   - Re-run the inventory query and confirm only the retained snapshot appears in yard views.\n   - Call the internal container API (or query yard view endpoints) to validate consumers see the corrected state.\n\n5) Rebuild cache consumers and push sync (API / Message broker / Cache)\n   - Trigger downstream sync so API consumers and caches pick up the corrected snapshot:\n     - Flush or invalidate relevant cache keys (Redis/cache console or cache-flush API).\n     - Publish a container-update event to the message bus or call internal refresh endpoint (e.g., POST /internal/containers/refresh with cntr_no=CMAU0000020).\n   - Follow rebuild process in [KB-2210] to ensure all consumers reconcile.\n\n6) Monitor, document, and close (Monitoring console / Incident tracker)\n   - Monitor logs and data-quality alerts for 24–72 hours for recurrence (watch for DuplicateSnapshotAttempt warnings).\n   - Record actions taken, timestamps, backup reference, and SQL statements in the incident ticket.\n   - If duplicates reoccur, escalate per KB [KB-2210] (no escalation required for single isolated event, escalate if recurring).\n\nEscalation Summary (<=180 words)\nIncident ALR-861600: Data quality monitor flagged duplicate container snapshot attempts for CMAU0000020. Logs show container_service.log WARN DuplicateSnapshotAttempt and the DB contained two identical-timestamp rows for CMAU0000020. Mitigation: Verified duplicates, created a DB backup, archived older duplicate rows while preserving the most recent operational snapshot, and triggered downstream cache/API sync so yard inventory consumers reflect the corrected state (per [KB-2210]). Risks: Short-term discrepancy in yard views; low risk to operations as most recent snapshot preserved. Ask: No escalation required currently — confirm acceptance of archive action and monitor for recurrence. Timeline: Detection and verification completed (T0); backup and archival performed immediately (T0 + <1 hour); cache rebuild and validation completed (T0 + <2 hours). Continue monitoring for 24–72 hours; if duplicates reappear, escalate to Platform Engineering with logs and DB backup reference.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 84,
+      "passed": true
+    },
+    "CNTR_1740787713_1760869571537": {
+      "testId": "CNTR_1740787713_1760869571537",
+      "timestamp": "2025-10-19T10:26:11.537Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Escalation Summary (<=180 words)\nALR-861600: The data quality monitor flagged duplicate container snapshots for CMAU0000020 where two rows with identical timestamps were written within one second, producing inconsistent yard inventory views. Logs show container_service.log WARN DuplicateSnapshotAttempt cntr_no=CMAU0000020 and the DB contains two matching rows. Impact is limited to transient inventory inconsistency; no vessel operations delayed and no manual handling required. Recommended immediate actions: confirm duplicates exist, archive the older snapshot while preserving the latest operational record, and trigger downstream cache/API consumers to resync. Actions follow CNTR duplicate guidance [KB-2210] and standard data-repair controls [KB-1749]. No escalation to operations control is required at this time; continue monitoring for recurrence and implement alert tuning to suppress benign rapid-retry noise.\n\nNumbered Remediation Actions\n1) Verify duplicate snapshots (Runs on: database, console)\n   - Query the container table to confirm two snapshot rows for CMAU0000020 and capture row IDs/timestamps.\n   - Reference: [KB-2210], [KB-1749].\n\n2) Archive older snapshot and preserve latest (Runs on: database)\n   - Mark or move the older duplicate row to the archive table (or set archive_flag) preserving the most recent snapshot as active.\n   - Ensure transactional safety and create a DB backup/snapshot before change.\n   - Reference: [KB-2210], [KB-1749].\n\n3) Trigger downstream resync (Runs on: API/console/shell)\n   - Invoke cache rebuild and push a sync event to downstream consumers so APIs and yard services read the corrected state.\n   - Confirm consumers report successful refresh and that inventory views reconcile.\n   - Reference: [KB-2210].\n\n4) Evidence collection & monitoring (Runs on: shell, logging service)\n   - Preserve container_service.log extract and DB query results as evidence; update incident record.\n   - Add short-term monitoring rule to alert on >1 snapshot/sec for same cntr_no.\n   - Reference: [KB-2210], [KB-1749].",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 85,
+          "issues": [
+            "Long response lacks clear structure or formatting"
+          ],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 83,
+      "passed": true
+    },
+    "CNTR_1740787713_1760869647112": {
+      "testId": "CNTR_1740787713_1760869647112",
+      "timestamp": "2025-10-19T10:27:27.112Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "ALR-861600 — Data quality monitor flagged a duplicate container snapshot for CMAU0000020: two snapshots were received within one second, producing inconsistent yard inventory views. Evidence: container_service.log contains a “DuplicateSnapshotAttempt” warning for cntr_no=CMAU0000020, and the container database shows two rows with identical timestamps for the same container. Following KB guidance [KB-2210], we confirmed multiple snapshots existed, retained the most recent operational snapshot and archived the older duplicate row, and rebuilt downstream cache consumers so API clients reflect the corrected state. Inventory consistency restored; no operational impact observed. No escalation required. Recommend continued monitoring for repeat duplicates and a review of the upstream producer/insertion path to prevent recurrence.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 85,
+          "issues": [
+            "Long response lacks clear structure or formatting"
+          ],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 78,
+      "passed": true
+    },
+    "CNTR_1740787713_1760870052959": {
+      "testId": "CNTR_1740787713_1760870052959",
+      "timestamp": "2025-10-19T10:34:12.959Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "1) Detect duplicate snapshots (database): Confirm presence of multiple snapshot rows for CMAU0000020 in the container table and validate timestamps and source log entries (container_service.log) per [KB-2210].  \n2) Retain most recent snapshot only (database/archive): Archive older duplicate rows, preserving the latest operational snapshot to restore consistent yard inventory; record change-set and retention rationale in audit logs as advised by [KB-2210].  \n3) Rebuild cache consumers (API/console): Trigger downstream cache and API consumer synces to propagate corrected inventory views and run verification queries against yard inventory endpoints.  \nEvidence: container_service.log shows DuplicateSnapshotAttempt; DB contains two rows with same timestamps. No escalation required; follow [KB-2210] steps and verify post-action consistency before closing.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
+    },
+    "CNTR_1740787713_1760870077226": {
+      "testId": "CNTR_1740787713_1760870077226",
+      "timestamp": "2025-10-19T10:34:37.226Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "ALR-861600 — Medium: Data quality monitor flagged duplicate container snapshots for CMAU0000020, with two inserts occurring within one second and producing inconsistent yard inventory views. Evidence: container_service.log shows \"DuplicateSnapshotAttempt cntr_no=CMAU0000020\" and the container table (db.sql) contains two rows with the same cntr_no and identical timestamps. Actions taken/recommended: (1) Confirm both snapshots and exact timestamps (see KB [KB-2210]). (2) Retain the most recent snapshot and archive the older duplicate row(s) to preserve the latest operational state (KB [KB-2210]). (3) Trigger downstream cache/consumer rebuilds and API sync to ensure corrected inventory is propagated. Impact is limited; no escalation required. Refer to KB [KB-2210] CNTR-024 for detailed procedure and verification steps.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 81,
+      "passed": true
+    },
+    "CNTR_1336769417_1760870077579": {
+      "testId": "CNTR_1336769417_1760870077579",
+      "timestamp": "2025-10-19T10:34:37.579Z",
+      "query": "playbook for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "{\n  \"importantSafetyNotes\": [\n    \"Take a full logical backup of container_snapshot before any DELETE operations to preserve auditability and enable rollback.\",\n    \"Perform all database writes within a transaction and verify COMMIT only after validation to avoid partial state changes.\",\n    \"Do not remove the most recent snapshot for any container — archive older rows only to preserve current operational state.\",\n    \"Schedule write operations during a low-traffic window where possible; if immediate action is required, inform downstream teams before cache rebuilds.\"\n  ],\n  \"actionSteps\": [\n    {\n      \"stepTitle\": \"Confirm duplicate snapshots exist for CMAU0000020\",\n      \"executionContext\": \"shell (host with application logs) + database (primary read replica or maintenance DB)\",\n      \"procedure\": [\n        \"(1) Inspect service log for duplicate snapshot warnings referencing CMAU0000020 to confirm occurrence (see Evidence container_service.log).\",\n        \"(2) Run a targeted DB query to count and list snapshot rows for cntr_no=CMAU0000020 to confirm multiple rows and capture ids/timestamps (follow KB-2210).\",\n        \"(3) Record returned row ids, snapshot_ts, and created_at for the duplicate set for audit and cross-check with logs.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Archive older duplicate snapshot rows, retain only the most recent\",\n      \"executionContext\": \"database (primary writable DB) — run inside a transaction / maintenance window\",\n      \"procedure\": [\n        \"(1) Take a logical backup (dump) of matching rows from container_snapshot for cntr_no=CMAU0000020 before any modification.\",\n        \"(2) Using the captured ids/timestamps, move all rows except the latest snapshot into container_snapshot_archive (or equivalent archival table) per KB-2210.\",\n        \"(3) Delete archived duplicate rows from container_snapshot only after successful INSERT into the archive and verification.\",\n        \"(4) Validate that exactly one row remains for cntr_no=CMAU0000020 and that the remaining row matches the most recent snapshot_ts in logs.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Trigger downstream cache / consumer rebuilds and force sync\",\n      \"executionContext\": \"API endpoints and application host (HTTP calls and service control)\",\n      \"procedure\": [\n        \"(1) Trigger a targeted container sync for CMAU0000020 via the internal sync API to ensure downstream views are refreshed.\",\n        \"(2) Trigger or enqueue a cache rebuild for container consumers (targeted and, if required, full container cache rebuild).\",\n        \"(3) If consumers are processes, restart the cache consumer service to clear in-memory inconsistent views (only if API triggers are insufficient).\",\n        \"(4) Monitor consumer logs for successful ingestion of the corrected snapshot and absence of DuplicateSnapshotAttempt warnings.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Post-action verification, documentation, and closeout\",\n      \"executionContext\": \"console / ticketing system / database\",\n      \"procedure\": [\n        \"(1) Re-run the initial detection query to confirm only one snapshot remains for CMAU0000020.\",\n        \"(2) Confirm downstream APIs and UI consumers return the corrected inventory view for CMAU0000020.\",\n        \"(3) Attach DB dump, archive table entries, executed commands, and log excerpts to the incident ticket and reference KB-2210.\",\n        \"(4) Mark incident ALR-861600 resolved with notes: backups taken, archived rows stored, cache rebuild performed, no escalation required.\"\n      ]\n    }\n  ],\n  \"languageCommands\": [\n    {\n      \"language\": \"bash\",\n      \"command\": \"grep \\\"DuplicateSnapshotAttempt\\\" /var/log/container_service.log | grep CMAU0000020 || true\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT cntr_no, COUNT(*) AS cnt, MIN(snapshot_ts) AS first_ts, MAX(snapshot_ts) AS last_ts FROM container_snapshot WHERE cntr_no='CMAU0000020' GROUP BY cntr_no HAVING COUNT(*)>1;\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT id, cntr_no, snapshot_ts, created_at FROM container_snapshot WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC, id DESC;\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"BEGIN; WITH ranked AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY cntr_no ORDER BY snapshot_ts DESC, id DESC) AS rn FROM container_snapshot WHERE cntr_no='CMAU0000020'), to_archive AS (SELECT cs.* FROM container_snapshot cs JOIN ranked r ON cs.id=r.id WHERE r.rn>1) INSERT INTO container_snapshot_archive SELECT * FROM to_archive; DELETE FROM container_snapshot WHERE id IN (SELECT id FROM to_archive); COMMIT;\"\n    },\n    {\n      \"language\": \"api\",\n      \"command\": \"curl -X POST \\\"https://internal.api/v1/sync/container/CMAU0000020\\\" -H \\\"Authorization: Bearer $TOKEN\\\" -H \\\"Content-Type: application/json\\\" -d '{\\\"force\\\":true}'\"\n    },\n    {\n      \"language\": \"api\",\n      \"command\": \"curl -X POST \\\"https://internal.api/v1/cache/rebuild\\\" -H \\\"Authorization: Bearer $TOKEN\\\" -H \\\"Content-Type: application/json\\\" -d '{\\\"scope\\\":\\\"container\\\",\\\"id\\\":\\\"CMAU0000020\\\"}'\"\n    },\n    {\n      \"language\": \"bash\",\n      \"command\": \"systemctl restart container-cache-consumer.service || echo 'service restart failed; check logs'\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT id, cntr_no, snapshot_ts, payload FROM container_snapshot WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC LIMIT 10;\"\n    }\n  ],\n  \"checklists\": [\n    {\n      \"title\": \"Incident resolution checklist\",\n      \"items\": [\n        \"Backed up affected rows from container_snapshot (dump stored with incident artifacts).\",\n        \"Archived all duplicate rows for CMAU0000020 into container_snapshot_archive and verified INSERT success.\",\n        \"Deleted archived duplicate rows from container_snapshot in a single transaction and committed.\",\n        \"Triggered targeted sync and cache rebuild; restarted consumer processes if required.\",\n        \"Verified only the most recent snapshot remains and downstream consumers reflect corrected state.\",\n        \"Updated incident ALR-861600 notes with commands run, KB-2210 reference, and attached evidence.\"\n      ]\n    },\n    {\n      \"title\": \"Ready to close\",\n      \"items\": [\n        \"Verification queries show a single snapshot remains for CMAU0000020.\",\n        \"Downstream APIs/clients reflect corrected yard inventory for CMAU0000020.\",\n        \"Archive table contains previous duplicate rows and backup files preserved.\",\n        \"Logs show no further DuplicateSnapshotAttempt entries for CMAU0000020 after remediation.\",\n        \"Incident ticket updated and 'No escalation required' recorded per guidance.\"\n      ]\n    }\n  ]\n}",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 100,
+          "issues": [],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 91,
+      "passed": true
+    },
+    "CNTR_1740787713_1760870126632": {
+      "testId": "CNTR_1740787713_1760870126632",
+      "timestamp": "2025-10-19T10:35:26.632Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "ALR-861600: Duplicate container snapshot detected for CMAU0000020. Data-quality monitor reported two snapshots inserted within one second, causing inconsistent yard inventory views. Evidence: container_service.log 'DuplicateSnapshotAttempt' and DB showing two rows with same timestamps.\n\n1) Confirm duplicates — database: run SQL query to list snapshots for CMAU0000020 and confirm timestamps; (KB-2210).\n2) Retain latest — database: archive/delete older duplicate rows, keep most recent operational snapshot; ensure transactional safety and audit trail (KB-2210).\n3) Rebuild consumers — API/shell: trigger downstream cache rebuild and API sync so consumers reflect corrected inventory; verify via health checks (KB-2210).\n4) Monitor & alert — console/logging: enable short-term increased monitoring for repeat attempts and capture forensic logs.\n\nNo escalation required. Refs: [KB-2210], [KB-1749]",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 85,
+          "issues": [
+            "Long response lacks clear structure or formatting"
+          ],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 83,
+      "passed": true
+    },
+    "CNTR_1740787713_1760870201258": {
+      "testId": "CNTR_1740787713_1760870201258",
+      "timestamp": "2025-10-19T10:36:41.259Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "ALR-861600: Data quality monitor flagged duplicate container snapshots for CMAU0000020 — logs show a DuplicateSnapshotAttempt and the container table contains two rows with identical timestamps, creating inconsistent yard inventory views; per KB-2210 (CNTR-024) we confirmed multiple snapshot rows exist, retained the most recent operational snapshot while archiving the older duplicated row, and triggered downstream cache/consumer rebuilds to propagate the corrected state (see container_service.log and container (db.sql) evidence); no operational escalation required at this time, but continue monitoring for repeating duplicate insert patterns and consult KB-1749 for additional diagnostic steps if recurrence is observed.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 81,
+      "passed": true
+    },
+    "CNTR_1740787713_1760870245329": {
+      "testId": "CNTR_1740787713_1760870245329",
+      "timestamp": "2025-10-19T10:37:25.329Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Incident ALR-861600: The data quality monitor flagged a duplicate container snapshot for CMAU0000020 indicating two inserts within one second that produced inconsistent yard inventory views. Investigation per KB-2210 confirmed two DB rows for CMAU0000020 with identical timestamps and container_service.log warnings 'DuplicateSnapshotAttempt'. Following KB-2210 guidance, I verified both snapshots exist, retained the most recent operational snapshot and archived the older duplicate to preserve auditability, and triggered a cache rebuild and downstream consumer sync to ensure API and yard systems reflect the corrected state. No vessel operations impacted and no escalation required; actions and evidence are logged (container_service.log, container(db.sql)) for audit and can be reviewed if further analysis is needed.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 85,
+          "issues": [
+            "Long response lacks clear structure or formatting"
+          ],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 78,
+      "passed": true
+    },
+    "CNTR_1740787713_1760870270809": {
+      "testId": "CNTR_1740787713_1760870270809",
+      "timestamp": "2025-10-19T10:37:50.809Z",
+      "query": "escalation for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "ALR-861600: Data quality monitor detected duplicate container snapshot insertions for CMAU0000020 within one second, producing inconsistent yard inventory views; logs show container_service.log WARN DuplicateSnapshotAttempt and the database (container table in db.sql) contains two rows for CMAU0000020 with identical timestamps. Per KB-2210 (CNTR-024) I confirmed both snapshots existed, retained the most recent operational snapshot while archiving the older duplicate row, and triggered downstream cache and API consumer rebuilds to propagate the corrected state; evidence files are container_service.log and the container (db.sql) dump. No escalation required at this time; recommend continued monitoring for repeat DuplicateSnapshotAttempt warnings and follow KB-2210 for recurrence handling and audit retention.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: proper documentation",
+            "Missing safety consideration: verification steps"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 85,
+          "issues": [
+            "Long response lacks clear structure or formatting"
+          ],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 78,
+      "passed": true
+    },
+    "VSL_1884422041_1760870300733": {
+      "testId": "VSL_1884422041_1760870300733",
+      "timestamp": "2025-10-19T10:38:20.733Z",
+      "query": "escalation for VESSEL_ERR_4 blocks vessel advice creation: Duty officer reporting that MV Lion City 07 returns VESSEL_ERR_4 when creating a new vessel advice from the portal.",
+      "aiResponse": "Incident ALR-861631: MV Lion City 07 returns VESSEL_ERR_4 when creating a new vessel advice; immediate operational plan: confirm there is an active vessel_advice record (run SELECT on vessel_advice in the database per [KB-1749]) to identify the conflicting record, verify any berth applications referencing that advice (database/API lookup per [KB-1754]) to ensure no active dependencies, expire the legacy advice by setting effective_end_datetime during the SQL maintenance window (database action per [KB-1767]) so a new advice can be created, and notify the requestor via the portal/email with correlation ID 9fa2e7c1afad4d6a and advise them to retry after changes; evidence includes vessel_advice_service.log showing ERROR AdviceService corrId=9fa2e7c1afad4d6a code=VESSEL_ERR_4 and the vessel_advice SELECT output, no escalation required.",
+      "module": "VSL",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: check vessel schedule",
+            "Missing required step: verify berth allocation",
+            "Missing required step: confirm ETA"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing vessel timing reference"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 50,
+          "issues": [
+            "Missing safety consideration: vessel safety protocols",
+            "Missing safety consideration: port clearance procedures"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 85,
+          "issues": [
+            "Long response lacks clear structure or formatting"
+          ],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 78,
+      "passed": true
+    },
+    "VSL_1224835807_1760870328009": {
+      "testId": "VSL_1224835807_1760870328009",
+      "timestamp": "2025-10-19T10:38:48.009Z",
+      "query": "playbook for VESSEL_ERR_4 blocks vessel advice creation: Duty officer reporting that MV Lion City 07 returns VESSEL_ERR_4 when creating a new vessel advice from the portal.",
+      "aiResponse": "{\n  \"importantSafetyNotes\": [\n    \"Do not expire or modify vessel advice while a vessel is actively scheduled for berthing or under operations. Coordinate with port operations and berth planners before any change.\",\n    \"Perform write changes only inside an approved maintenance window and after a verified database backup to allow rollback if required.\",\n    \"Do not delete records; apply only an effective_end_datetime to expire a legacy advice per [KB-1767].\",\n    \"Confirm there are no active berth applications depending on the advice before expiring it to avoid operational disruption [KB-1754].\"\n  ],\n  \"actionSteps\": [\n    {\n      \"stepTitle\": \"Confirm active vessel advice blocking creation (Database - read-only)\",\n      \"executionContext\": \"database (read-only query)\",\n      \"procedure\": [\n        \"Query vessel_advice for MV Lion City 07 to identify any active or overlapping advice records and capture vessel_advice_no(s). Use correlation ID 9fa2e7c1afad4d6a from logs for traceability. Reference [KB-1749].\",\n        \"If multiple advice rows exist, note effective_start_datetime and effective_end_datetime for each to understand overlap.\",\n        \"Save the query results (vessel_advice_no and timestamps) for the next steps and audit trail.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Check for berth applications referencing the advice (Database - read-only)\",\n      \"executionContext\": \"database (read-only query)\",\n      \"procedure\": [\n        \"Using the vessel_advice_no(s) from Step 1, query the berth_application table to find any berth applications referencing those advice records and capture their statuses. Reference [KB-1754].\",\n        \"If any berth_application records are ACTIVE, PENDING or otherwise not completed, STOP and coordinate with berth planning/operations to resolve those applications before expiring the advice.\",\n        \"If no active berth applications reference the advice, proceed to Step 3.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Expire legacy vessel advice so a new advice can be created (Database - write during maintenance window)\",\n      \"executionContext\": \"database (write; run during approved maintenance window)\",\n      \"procedure\": [\n        \"Schedule an approved maintenance window and ensure a full DB backup/snapshot has been taken. Confirm stakeholders (port operations, berth planner, TOS admin) are informed. Reference [KB-1767].\",\n        \"Run the UPDATE to set an effective_end_datetime (do not delete rows). Use the vessel_advice_no(s) identified in Step 1. Example update sets end timestamp to one second before current time.\",\n        \"After the update, run a SELECT to verify effective_end_datetime is set and the record is no longer considered active.\",\n        \"Record SQL statements, timestamps, operator name, and change ticket ID in the change log for audit and rollback procedures.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Verify change, monitor logs, and notify the requestor (Portal/API/console & logs)\",\n      \"executionContext\": \"application portal/console and application logs (shell)\",\n      \"procedure\": [\n        \"Re-run the read-only SELECT from Step 1 to confirm the advice is expired (effective_end_datetime populated) and no active records remain for MV Lion City 07.\",\n        \"Check vessel_advice_service.log for the original correlation ID (9fa2e7c1afad4d6a) and ensure VESSEL_ERR_4 no longer occurs when a new advice creation is attempted.\",\n        \"Inform the requestor (Vessel Planning) that the legacy advice has been expired and they may retry creating the new vessel advice; include the change reference, time, and KB pointer [KB-1767].\",\n        \"If the requestor still receives VESSEL_ERR_4, capture new logs, correlation IDs, and escalate following local incident procedures.\"\n      ]\n    }\n  ],\n  \"languageCommands\": [\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT vessel_advice_no, system_vessel_name, effective_start_datetime, effective_end_datetime FROM vessel_advice WHERE system_vessel_name = 'MV Lion City 07' AND (effective_end_datetime IS NULL OR effective_end_datetime > CURRENT_TIMESTAMP) ORDER BY effective_start_datetime DESC;\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT berth_application_id, vessel_advice_no, status, created_at FROM berth_application WHERE vessel_advice_no IN (SELECT vessel_advice_no FROM vessel_advice WHERE system_vessel_name = 'MV Lion City 07');\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"UPDATE vessel_advice SET effective_end_datetime = (CURRENT_TIMESTAMP - INTERVAL '1 second') WHERE vessel_advice_no = '<Vessel_Advice_No>' AND (effective_end_datetime IS NULL OR effective_end_datetime > CURRENT_TIMESTAMP);\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT vessel_advice_no, system_vessel_name, effective_start_datetime, effective_end_datetime FROM vessel_advice WHERE system_vessel_name = 'MV Lion City 07' ORDER BY effective_start_datetime DESC;\"\n    },\n    {\n      \"language\": \"bash\",\n      \"command\": \"grep -n \\\"corrId=9fa2e7c1afad4d6a\\\" /var/log/vessel_advice_service.log || true\"\n    },\n    {\n      \"language\": \"bash\",\n      \"command\": \"tail -n 200 /var/log/vessel_advice_service.log | grep -n \\\"VESSEL_ERR_4\\\" || true\"\n    }\n  ],\n  \"checklists\": [\n    {\n      \"title\": \"Pre-change checklist\",\n      \"items\": [\n        \"Confirm read-only query identifies the blocking vessel_advice_no(s) for MV Lion City 07 [KB-1749].\",\n        \"Confirm no ACTIVE/PENDING berth_application references those advice records [KB-1754].\",\n        \"Obtain approvals and schedule an approved maintenance window for write operations.\",\n        \"Take a verified database backup/snapshot and record backup ID and timestamp.\",\n        \"Notify stakeholders (port operations, berth planners, TOS admins) of planned expiry operation.\"\n      ]\n    },\n    {\n      \"title\": \"Post-change verification checklist\",\n      \"items\": [\n        \"Re-run SELECT to confirm effective_end_datetime is set for the expired advice.\",\n        \"Confirm no active vessel_advice rows remain for MV Lion City 07 and that timestamps make sense.\",\n        \"Check application logs for residual VESSEL_ERR_4 occurrences and confirm resolution (use correlation ID 9fa2e7c1afad4d6a for historical trace).\",\n        \"Ask requestor to retry creating the new vessel advice and capture outcome.\",\n        \"Document change details, SQL run, operator, timestamps and update change ticket.\"\n      ]\n    },\n    {\n      \"title\": \"Ready to close\",\n      \"items\": [\n        \"Requestor confirmed they can create the new vessel advice successfully or alternative remediation agreed.\",\n        \"All verification queries and log checks completed and saved to the incident/change record.\",\n        \"Post-change stakeholders notified and any follow-up actions assigned.\",\n        \"Change ticket/incident ALR-861631 updated with outcome and closed per local process.\"\n      ]\n    }\n  ]\n}",
+      "module": "VSL",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: check vessel schedule",
+            "Missing required step: verify berth allocation",
+            "Missing required step: confirm ETA"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 90,
+          "issues": [
+            "Incomplete step sequence"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: port clearance procedures"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 87,
+      "passed": true
+    },
+    "GENERAL_1649327054_1760870375658": {
+      "testId": "GENERAL_1649327054_1760870375658",
+      "timestamp": "2025-10-19T10:39:35.658Z",
+      "query": "escalation for BAPLIE inconsistency for MV PACIFIC DAWN/07E: Planning team notes BAPLIE plan still shows units in bay 14 even though COARRI indicates load complete, suggesting the plan regressed to an older timestamp.",
+      "aiResponse": "Incident TCK-742311: MV PACIFIC DAWN/07E planning_sync detected an older BAPLIE timestamp overwriting bay 14 while COARRI shows bay 14 load complete (planning_sync.log WARN timestamp 2025-10-07T04:20; edi_coarri.log INFO REF-ARR-071...), causing a regression in the stowage plan that risks mis-declared load status and berth operations; immediate actions per [KB-2301] and [KB-1749] are to lock stowage plan updates via the TOS (API/database) to prevent further regressions, replay the latest BAPLIE interchange through the ingestion API to force the correct file, validate bay 14 inventory using analytics queries against the planning DB and terminal console to reconcile vessel and yard views, and prepare an escalation brief for Vessel Operations and the Duty Lead (notify Jaden Smith) to monitor operational impact and safety—hold any physical moves on bay 14 until inventory is reconciled.",
+      "module": "GENERAL",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 80,
+          "issues": [
+            "Missing required step: assess situation",
+            "Missing required step: follow protocol"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 100,
+          "issues": [],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 96,
+      "passed": true
+    },
+    "GENERAL_623778118_1760870384148": {
+      "testId": "GENERAL_623778118_1760870384148",
+      "timestamp": "2025-10-19T10:39:44.148Z",
+      "query": "playbook for BAPLIE inconsistency for MV PACIFIC DAWN/07E: Planning team notes BAPLIE plan still shows units in bay 14 even though COARRI indicates load complete, suggesting the plan regressed to an older timestamp.",
+      "aiResponse": "{\n  \"importantSafetyNotes\": [\n    \"Do not release or remove the stowage-plan lock until bay 14 inventory is validated and operations confirm no moves in progress.\",\n    \"Coordinate all actions with Vessel Operations lead (Jaden Smith) to prevent conflicting shore/ship moves that could cause cargo mis-declaration or unsafe operations.\",\n    \"Treat any re-apply of BAPLIE as authoritative but verify against COARRI and physical checks; avoid repeated overwrites which can desynchronize yard and vessel views.\",\n    \"Preserve current logs and artifacts before any overwrite so root-cause analysis can proceed without data loss.\"\n  ],\n  \"actionSteps\": [\n    {\n      \"stepTitle\": \"Lock stowage plan updates for MV PACIFIC DAWN/07E (Prevent further regressions) [KB-2301]\",\n      \"executionContext\": \"TOS admin console / database\",\n      \"procedure\": [\n        \"Open TOS admin console and locate stowage plan for vessel 'MV PACIFIC DAWN' voyage '07E'.\",\n        \"Apply administrative lock to plan updates (set plan_locked = true) to prevent automated or manual overwrite.\",\n        \"Record lock reason: 'TCK-742311 BAPLIE inconsistency — lock per KB-2301 pending BAPLIE replay and validation'.\",\n        \"Capture timestamp, user, and correlation id for audit; save to incident workspace and planning_sync.log copy.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Preserve current state and collect forensic evidence (Immutable artifacts) [KB-2301]\",\n      \"executionContext\": \"Shell (application server) / Logging system\",\n      \"procedure\": [\n        \"Copy planning_sync.log and edi_coarri.log entries related to corrId=vs-baplie-07E to the incident folder with timestamped filenames.\",\n        \"Export current TOS stowage_plan record(s) for voyage 07E to JSON (full row snapshot) and store in incident evidence store.\",\n        \"Export the currently ingested BAPLIE file used by the system and record its ingestion timestamp and file checksum.\",\n        \"Notify Vessel Duty Lead (Jaden Smith) that evidence is collected and provide access location.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Replay latest authoritative BAPLIE interchange (Force ingest of newest plan) [KB-2301]\",\n      \"executionContext\": \"API (BAPLIE ingest) / SFTP inbound if required\",\n      \"procedure\": [\n        \"Identify the authoritative/latest BAPLIE file (confirm file timestamp > 2025-10-07T04:20 and checksum matches source).\",\n        \"Initiate BAPLIE re-ingest using the system's BAPLIE import API or SFTP inbound channel with 'overwrite' or 'force' flag per KB-2301.\",\n        \"Tag this ingest with incident id TCK-742311 and correlation id vs-baplie-07E to track processing.\",\n        \"Monitor ingest job until completion and capture ingest log lines and any warnings/errors for evidence.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Force reconciliation/override of stale data and monitor processing pipelines\",\n      \"executionContext\": \"Application orchestration / message queue / TOS background worker\",\n      \"procedure\": [\n        \"If system provides a replay/override endpoint, call the reconciliation job to reindex stowage plan from the newly ingested BAPLIE.\",\n        \"Watch planning_sync and worker logs for processing events: look for 'ingest complete' and any 'older timestamp' warnings referencing vs-baplie-07E.\",\n        \"If a worker re-queued an older BAPLIE, identify source system and pause that source until root-cause is resolved to prevent recurrence.\",\n        \"Document processing timestamps and resulting stowage plan version id for verification.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Validate bay 14 inventory and cross-check COARRI / yard view (Analytics validation) [KB-2301]\",\n      \"executionContext\": \"Database (analytics) / TOS console\",\n      \"procedure\": [\n        \"Run inventory queries to confirm bay 14 shows no loaded units (or expected status per COARRI).\",\n        \"Cross-check COARRI record for bay 14 (message_ref REF-ARR-071...) and confirm status=complete matches the ingested BAPLIE state.\",\n        \"Confirm yard and vessel views are synchronized: ensure container counts, container IDs, and statuses match across TOS, yard inventory DB, and COARRI.\",\n        \"If discrepancies remain, escalate to Data Integration team and hold the stowage plan lock until corrected.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Prepare escalation brief and notify operational stakeholders\",\n      \"executionContext\": \"ServiceNow / Email / Slack (operational channels)\",\n      \"procedure\": [\n        \"Prepare a concise escalation brief including: incident id TCK-742311, affected vessel MV PACIFIC DAWN/07E, timeline of events, key logs (planning_sync and edi_coarri snippets), actions taken, and current state.\",\n        \"Attach preserved evidence files and the new stowage plan version id; reference KB-2301 for replay/lock procedures.\",\n        \"Notify Jaden Smith (Vessel Duty Team) and Vessel Operations lead; include Data Integration and Planning leads in distribution.\",\n        \"Request monitoring cadence (e.g., 15-min checks) until verification is complete and include expected next update time.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Release stowage plan lock and close incident after verification (Finalization)\",\n      \"executionContext\": \"TOS admin console / ServiceNow incident\",\n      \"procedure\": [\n        \"Only after all validations confirm bay 14 inventory and COARRI/TOS are in sync and stakeholders confirm no live moves, remove the administrative lock.\",\n        \"Document final verification artifacts (queries output, stakeholder acknowledgements) in incident record.\",\n        \"Update ServiceNow TCK-742311 with closure notes, link KB-2301 for future reference, and set follow-up action to investigate root cause of timestamp regression.\",\n        \"Mark incident ready to close and notify Vessel Duty Team for post-incident review.\"\n      ]\n    }\n  ],\n  \"languageCommands\": [\n    {\n      \"language\": \"bash\",\n      \"command\": \"cp /var/log/planning_sync.log /srv/incidents/TCK-742311/planning_sync.vs-baplie-07E.$(date -u +%Y%m%dT%H%M%SZ).log && cp /var/log/edi_coarri.log /srv/incidents/TCK-742311/edi_coarri.vs-baplie-07E.$(date -u +%Y%m%dT%H%M%SZ).log\"\n    },\n    {\n      \"language\": \"bash\",\n      \"command\": \"tail -n 200 /var/log/planning_sync.log | grep \\\"corrId=vs-baplie-07E\\\"\"\n    },\n    {\n      \"language\": \"api\",\n      \"command\": \"curl -X POST \\\"https://tos.example.com/api/v1/baplie/ingest?force=true&incident=TCK-742311&corrId=vs-baplie-07E\\\" -H \\\"Authorization: Bearer $TOKEN\\\" -F \\\"file=@/srv/incidents/TCK-742311/authoritative_baplie.edi\\\"\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"UPDATE stowage_plans SET plan_locked = TRUE, lock_reason = 'TCK-742311 BAPLIE inconsistency (KB-2301)', lock_ts = CURRENT_TIMESTAMP WHERE vessel = 'MV PACIFIC DAWN' AND voyage = '07E';\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT container_id, bay, row, tier, status FROM vessel_inventory WHERE vessel = 'MV PACIFIC DAWN' AND voyage = '07E' AND bay = 14;\"\n    },\n    {\n      \"language\": \"bash\",\n      \"command\": \"curl -s \\\"https://tos.example.com/api/v1/stowage/version?vessel=MV%20PACIFIC%20DAWN&voyage=07E\\\" -H \\\"Authorization: Bearer $TOKEN\\\"\"\n    }\n  ],\n  \"checklists\": [\n    {\n      \"title\": \"Pre-action checklist\",\n      \"items\": [\n        \"Confirm authoritative BAPLIE file location and checksum before replay.\",\n        \"Notify Vessel Operations lead (Jaden Smith) of imminent plan lock and re-ingest.\",\n        \"Ensure incident evidence folder exists and has write access for logs and exports.\",\n        \"Ensure authorization token and admin credentials are available for TOS API and DB commands.\"\n      ]\n    },\n    {\n      \"title\": \"Verification checklist (before releasing lock)\",\n      \"items\": [\n        \"New BAPLIE ingest completed successfully with no 'older timestamp' overwrite warnings.\",\n        \"Bay 14 inventory query matches COARRI status=complete and expected counts.\",\n        \"Stakeholder confirmation received from Vessel Operations and Planning teams that vessel view is correct.\",\n        \"No pending automated processes identified that will reintroduce older BAPLIE data.\"\n      ]\n    },\n    {\n      \"title\": \"Ready to close\",\n      \"items\": [\n        \"All evidence archived in incident folder and ServiceNow record updated.\",\n        \"Stowage plan lock removed only after verification and stakeholder sign-off.\",\n        \"Post-incident action created to investigate root cause of timestamp regression and prevent recurrence (assign owner and ETA).\",\n        \"Incident TCK-742311 updated with closure notes and KB-2301 referenced for replay/lock steps.\"\n      ]\n    }\n  ]\n}",
+      "module": "GENERAL",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 80,
+          "issues": [
+            "Missing required step: assess situation",
+            "Missing required step: follow protocol"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 100,
+          "issues": [],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 96,
+      "passed": true
     }
   },
   "summary": {
-    "totalTests": 12,
-    "passedTests": 12,
+    "totalTests": 26,
+    "passedTests": 26,
     "failedTests": 0,
-    "avgAccuracy": 87,
-    "lastRun": "2025-10-19T10:09:57.287Z"
+    "avgAccuracy": 86,
+    "lastRun": "2025-10-19T10:39:44.150Z"
   }
 }
