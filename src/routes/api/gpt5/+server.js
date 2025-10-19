@@ -406,7 +406,12 @@ function parsePlaybookJson(raw) {
 	const languageCommands = sanitizeCommands(data.languageCommands);
 	const checklists = sanitizeChecklists(data.checklists);
 
-	if (!importantSafetyNotes.length || !actionSteps.length || !languageCommands.length || !checklists.length) {
+	if (
+		!importantSafetyNotes.length ||
+		!actionSteps.length ||
+		!languageCommands.length ||
+		!checklists.length
+	) {
 		return { ok: false, error: 'MISSING_FIELDS' };
 	}
 
@@ -427,9 +432,7 @@ function parsePlaybookJson(raw) {
  */
 function sanitizeStringArray(value) {
 	if (!Array.isArray(value)) return [];
-	return value
-		.map((item) => normalizeNarrative(item))
-		.filter((item) => item.length > 0);
+	return value.map((item) => normalizeNarrative(item)).filter((item) => item.length > 0);
 }
 
 /**
@@ -506,9 +509,7 @@ function sanitizeChecklists(value) {
  */
 function coerceStringList(value) {
 	if (Array.isArray(value)) {
-		return value
-			.map((item) => normalizeNarrative(item))
-			.filter((item) => item.length > 0);
+		return value.map((item) => normalizeNarrative(item)).filter((item) => item.length > 0);
 	}
 	if (typeof value === 'string') {
 		return value
@@ -587,5 +588,9 @@ function stripCodeFences(value) {
  * @returns {string}
  */
 function stripJsonFences(raw) {
-	return raw.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+	return raw
+		.trim()
+		.replace(/^```json\s*/i, '')
+		.replace(/```$/i, '')
+		.trim();
 }

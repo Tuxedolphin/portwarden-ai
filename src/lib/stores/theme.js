@@ -6,18 +6,18 @@ function createThemeStore() {
 	// Initialize with system preference or default to dark
 	const getInitialTheme = () => {
 		if (!browser) return 'dark';
-		
+
 		// Check localStorage first
 		const stored = localStorage.getItem('theme');
 		if (stored && (stored === 'light' || stored === 'dark')) {
 			return stored;
 		}
-		
+
 		// Fall back to system preference
 		if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
 			return 'dark';
 		}
-		
+
 		return 'light';
 	};
 
@@ -36,7 +36,7 @@ function createThemeStore() {
 			set(theme);
 		},
 		toggle: () => {
-			update(current => {
+			update((current) => {
 				const newTheme = current === 'light' ? 'dark' : 'light';
 				if (browser) {
 					localStorage.setItem('theme', newTheme);

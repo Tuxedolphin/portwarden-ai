@@ -1,7 +1,7 @@
 <script>
 	import { Button } from '$lib/components/ui';
-	
-	let { 
+
+	let {
 		showCreate = $bindable(),
 		title = $bindable(''),
 		description = $bindable(''),
@@ -18,7 +18,13 @@
 				<button class="close-btn" onclick={() => (showCreate = false)}>×</button>
 			</header>
 
-			<form class="modal-form" onsubmit={/** @param {Event} e */ (e) => { e.preventDefault(); onCreateIncident(); }}>
+			<form
+				class="modal-form"
+				onsubmit={/** @param {Event} e */ (e) => {
+					e.preventDefault();
+					onCreateIncident();
+				}}
+			>
 				<div class="form-group">
 					<label for="title">Incident Title</label>
 					<input

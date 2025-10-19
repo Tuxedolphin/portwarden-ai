@@ -1,8 +1,8 @@
 <script>
 	import { Button, Avatar } from '$lib/components/ui';
 	import ErrorViewer from '$lib/ErrorViewer.svelte';
-	
-	let { 
+
+	let {
 		selectedIncident,
 		showAiPanel = $bindable(),
 		playbookOutput = $bindable(''),
@@ -56,9 +56,7 @@
 
 			<div class="ai-modal-content">
 				<div class="ai-interface">
-					<Avatar variant="ai" size="xl" fallback="AI">
-						🤖
-					</Avatar>
+					<Avatar variant="ai" size="xl" fallback="AI">🤖</Avatar>
 					<div class="ai-welcome">
 						<p>
 							I'm ready to help you resolve incident <strong>#{selectedIncident.id}</strong>. I can
@@ -68,10 +66,7 @@
 				</div>
 
 				<div class="ai-actions">
-					<Button
-						loading={playbookLoading}
-						onclick={() => onRequestGpt5('playbook')}
-					>
+					<Button loading={playbookLoading} onclick={() => onRequestGpt5('playbook')}>
 						📋 Generate Playbook
 					</Button>
 					<Button
@@ -162,7 +157,8 @@
 							</div>
 							{#if showRawPlaybook}
 								<div class="ai-output-content">
-									<pre><code>{playbookOutput || JSON.stringify(playbookPayload, null, 2)}</code></pre>
+									<pre><code>{playbookOutput || JSON.stringify(playbookPayload, null, 2)}</code
+										></pre>
 								</div>
 							{/if}
 						{:else if playbookOutput}
@@ -477,7 +473,10 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+		transition:
+			background 0.2s ease,
+			border 0.2s ease,
+			color 0.2s ease;
 	}
 
 	.raw-toggle:hover {

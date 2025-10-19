@@ -1,8 +1,8 @@
 <script>
 	import { Button } from '$lib/components/ui';
 	import IncidentCard from '../molecules/IncidentCard.svelte';
-	
-	let { 
+
+	let {
 		items = [],
 		statusOptions = [],
 		onStatusUpdate,
@@ -14,13 +14,7 @@
 
 <div class="incidents-grid">
 	{#each items as incident}
-		<IncidentCard 
-			{incident} 
-			{statusOptions}
-			{onStatusUpdate}
-			{onSelectForAI}
-			{onArchive}
-		/>
+		<IncidentCard {incident} {statusOptions} {onStatusUpdate} {onSelectForAI} {onArchive} />
 	{/each}
 
 	{#if items.length === 0}
@@ -50,9 +44,11 @@
 		border: 2px dashed rgba(148, 163, 184, 0.3);
 		border-radius: 2rem;
 		backdrop-filter: blur(10px);
-		transition: background 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .empty-state {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.6), rgba(241, 245, 249, 0.4));
 		border: 2px dashed rgba(148, 163, 184, 0.4);

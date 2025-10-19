@@ -24,48 +24,48 @@ export const THEME_VARIABLES = {
 	BG_SECONDARY: 'var(--maritime-bg-secondary)',
 	BG_TERTIARY: 'var(--maritime-bg-tertiary)',
 	BG_SURFACE: 'var(--maritime-bg-surface)',
-	
+
 	// Text colors
 	TEXT_PRIMARY: 'var(--maritime-text-primary)',
 	TEXT_SECONDARY: 'var(--maritime-text-secondary)',
 	TEXT_MUTED: 'var(--maritime-text-muted)',
 	TEXT_ACCENT: 'var(--maritime-text-accent)',
-	
+
 	// Accent colors
 	ACCENT: 'var(--maritime-accent)',
 	ACCENT_SECONDARY: 'var(--maritime-accent-secondary)',
 	ACCENT_HOVER: 'var(--maritime-accent-hover)',
 	ACCENT_LIGHT: 'var(--maritime-accent-light)',
-	
+
 	// Border colors
 	BORDER: 'var(--maritime-border)',
 	BORDER_HOVER: 'var(--maritime-border-hover)',
 	BORDER_LIGHT: 'var(--maritime-border-light)',
-	
+
 	// Shadow values
 	SHADOW: 'var(--maritime-shadow)',
 	SHADOW_LIGHT: 'var(--maritime-shadow-light)',
 	SHADOW_HEAVY: 'var(--maritime-shadow-heavy)',
-	
+
 	// Status colors
 	STATUS_CRITICAL: 'var(--maritime-status-critical)',
 	STATUS_HIGH: 'var(--maritime-status-high)',
 	STATUS_MEDIUM: 'var(--maritime-status-medium)',
 	STATUS_LOW: 'var(--maritime-status-low)',
 	STATUS_RESOLVED: 'var(--maritime-status-resolved)',
-	
+
 	// Gradients
 	GRADIENT_SURFACE: 'var(--maritime-gradient-surface)',
 	GRADIENT_SURFACE_HOVER: 'var(--maritime-gradient-surface-hover)',
 	GRADIENT_HEADER: 'var(--maritime-gradient-header)',
 	GRADIENT_HERO: 'var(--maritime-gradient-hero)',
 	GRADIENT_BUTTON: 'var(--maritime-gradient-button)',
-	
+
 	// Transitions
 	TRANSITION: 'var(--maritime-transition)',
 	TRANSITION_FAST: 'var(--maritime-transition-fast)',
 	TRANSITION_SLOW: 'var(--maritime-transition-slow)',
-	
+
 	// Backdrop filters
 	BLUR: 'var(--maritime-blur)',
 	BLUR_HEAVY: 'var(--maritime-blur-heavy)'
@@ -96,17 +96,17 @@ export const THEME_CLASSES = {
  */
 export function getCurrentTheme(): ThemeType {
 	if (typeof window === 'undefined') return THEME_CONFIG.DEFAULT_THEME;
-	
+
 	const stored = localStorage.getItem(THEME_CONFIG.STORAGE_KEY);
 	if (stored && Object.values(THEME_CONFIG.THEMES).includes(stored as ThemeType)) {
 		return stored as ThemeType;
 	}
-	
+
 	// Check system preference
 	if (window.matchMedia('(prefers-color-scheme: light)').matches) {
 		return THEME_CONFIG.THEMES.LIGHT;
 	}
-	
+
 	return THEME_CONFIG.DEFAULT_THEME;
 }
 
@@ -115,12 +115,12 @@ export function getCurrentTheme(): ThemeType {
  */
 export function setTheme(theme: ThemeType): void {
 	if (typeof window === 'undefined') return;
-	
+
 	if (!Object.values(THEME_CONFIG.THEMES).includes(theme)) {
 		console.warn(`Invalid theme: ${theme}. Using default.`);
 		theme = THEME_CONFIG.DEFAULT_THEME;
 	}
-	
+
 	localStorage.setItem(THEME_CONFIG.STORAGE_KEY, theme);
 	applyThemeToDocument(theme);
 }
@@ -130,15 +130,15 @@ export function setTheme(theme: ThemeType): void {
  */
 export function applyThemeToDocument(theme: ThemeType): void {
 	if (typeof document === 'undefined') return;
-	
+
 	// Remove all theme classes
-	Object.values(THEME_CONFIG.THEMES).forEach(t => {
+	Object.values(THEME_CONFIG.THEMES).forEach((t) => {
 		document.documentElement.classList.remove(t);
 	});
-	
+
 	// Add current theme class
 	document.documentElement.classList.add(theme);
-	
+
 	// Force background color change with inline styles as backup
 	if (theme === 'light') {
 		document.documentElement.style.backgroundColor = '#f8fafc';
@@ -149,7 +149,7 @@ export function applyThemeToDocument(theme: ThemeType): void {
 		document.body.style.backgroundColor = '#0a0f1c';
 		document.body.style.color = '#f8fafc';
 	}
-	
+
 	// Debug logging
 	console.log(`Theme applied: ${theme}`, document.documentElement.classList.toString());
 }
@@ -159,10 +159,9 @@ export function applyThemeToDocument(theme: ThemeType): void {
  */
 export function toggleTheme(): ThemeType {
 	const current = getCurrentTheme();
-	const newTheme = current === THEME_CONFIG.THEMES.DARK 
-		? THEME_CONFIG.THEMES.LIGHT 
-		: THEME_CONFIG.THEMES.DARK;
-	
+	const newTheme =
+		current === THEME_CONFIG.THEMES.DARK ? THEME_CONFIG.THEMES.LIGHT : THEME_CONFIG.THEMES.DARK;
+
 	setTheme(newTheme);
 	return newTheme;
 }
@@ -181,7 +180,7 @@ export function getStatusColor(status?: string): string {
  */
 export function createThemeStyles(styles: Record<string, string>): Record<string, string> {
 	const themeStyles: Record<string, string> = {};
-	
+
 	Object.entries(styles).forEach(([property, value]) => {
 		// If value is a theme variable key, convert it
 		if (typeof value === 'string' && value in THEME_VARIABLES) {
@@ -190,7 +189,7 @@ export function createThemeStyles(styles: Record<string, string>): Record<string
 			themeStyles[property] = value;
 		}
 	});
-	
+
 	return themeStyles;
 }
 
@@ -213,10 +212,10 @@ export function isLightTheme(): boolean {
  */
 export function initializeTheme(): void {
 	if (typeof window === 'undefined') return;
-	
+
 	const theme = getCurrentTheme();
 	applyThemeToDocument(theme);
-	
+
 	// Listen for system theme changes
 	window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
 		// Only auto-switch if no manual preference is stored

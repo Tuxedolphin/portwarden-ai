@@ -6,44 +6,60 @@
 	--maritime-bg-secondary: #1e293b;
 	--maritime-bg-tertiary: #334155;
 	--maritime-bg-surface: #475569;
-	
+
 	--maritime-text-primary: #f8fafc;
 	--maritime-text-secondary: #e2e8f0;
 	--maritime-text-muted: #94a3b8;
 	--maritime-text-accent: #cbd5e1;
-	
+
 	--maritime-accent: #60a5fa;
 	--maritime-accent-secondary: #3b82f6;
 	--maritime-accent-hover: #2563eb;
 	--maritime-accent-light: #93c5fd;
-	
+
 	--maritime-border: rgba(148, 163, 184, 0.2);
 	--maritime-border-hover: rgba(96, 165, 250, 0.4);
 	--maritime-border-light: rgba(148, 163, 184, 0.1);
-	
+
 	--maritime-shadow: rgba(0, 0, 0, 0.3);
 	--maritime-shadow-light: rgba(0, 0, 0, 0.1);
 	--maritime-shadow-heavy: rgba(0, 0, 0, 0.4);
-	
+
 	/* Status Colors */
 	--maritime-status-critical: #ef4444;
 	--maritime-status-high: #f97316;
 	--maritime-status-medium: #eab308;
 	--maritime-status-low: #22c55e;
 	--maritime-status-resolved: #10b981;
-	
+
 	/* Surface Gradients */
-	--maritime-gradient-surface: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.6));
-	--maritime-gradient-surface-hover: linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(51, 65, 85, 0.7));
-	--maritime-gradient-header: linear-gradient(135deg, rgba(51, 65, 85, 0.8), rgba(71, 85, 105, 0.6));
+	--maritime-gradient-surface: linear-gradient(
+		145deg,
+		rgba(15, 23, 42, 0.8),
+		rgba(30, 41, 59, 0.6)
+	);
+	--maritime-gradient-surface-hover: linear-gradient(
+		145deg,
+		rgba(30, 41, 59, 0.9),
+		rgba(51, 65, 85, 0.7)
+	);
+	--maritime-gradient-header: linear-gradient(
+		135deg,
+		rgba(51, 65, 85, 0.8),
+		rgba(71, 85, 105, 0.6)
+	);
 	--maritime-gradient-hero: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.8));
-	--maritime-gradient-button: linear-gradient(135deg, var(--maritime-accent), var(--maritime-accent-secondary));
-	
+	--maritime-gradient-button: linear-gradient(
+		135deg,
+		var(--maritime-accent),
+		var(--maritime-accent-secondary)
+	);
+
 	/* Animation & Transitions */
 	--maritime-transition: all 0.3s ease;
 	--maritime-transition-fast: all 0.2s ease;
 	--maritime-transition-slow: all 0.5s ease;
-	
+
 	/* Backdrop Filters */
 	--maritime-blur: blur(10px);
 	--maritime-blur-heavy: blur(15px);
@@ -55,31 +71,51 @@
 	--maritime-bg-secondary: #f1f5f9;
 	--maritime-bg-tertiary: #e2e8f0;
 	--maritime-bg-surface: #cbd5e1;
-	
+
 	--maritime-text-primary: #0f172a;
 	--maritime-text-secondary: #1e293b;
 	--maritime-text-muted: #64748b;
 	--maritime-text-accent: #475569;
-	
+
 	--maritime-accent: #3b82f6;
 	--maritime-accent-secondary: #2563eb;
 	--maritime-accent-hover: #1d4ed8;
 	--maritime-accent-light: #60a5fa;
-	
+
 	--maritime-border: rgba(148, 163, 184, 0.3);
 	--maritime-border-hover: rgba(59, 130, 246, 0.4);
 	--maritime-border-light: rgba(148, 163, 184, 0.2);
-	
+
 	--maritime-shadow: rgba(0, 0, 0, 0.1);
 	--maritime-shadow-light: rgba(0, 0, 0, 0.05);
 	--maritime-shadow-heavy: rgba(0, 0, 0, 0.15);
-	
+
 	/* Light Theme Surface Gradients */
-	--maritime-gradient-surface: linear-gradient(145deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.6));
-	--maritime-gradient-surface-hover: linear-gradient(145deg, rgba(241, 245, 249, 0.9), rgba(226, 232, 240, 0.7));
-	--maritime-gradient-header: linear-gradient(135deg, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.6));
-	--maritime-gradient-hero: linear-gradient(135deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.8));
-	--maritime-gradient-button: linear-gradient(135deg, var(--maritime-accent), var(--maritime-accent-secondary));
+	--maritime-gradient-surface: linear-gradient(
+		145deg,
+		rgba(248, 250, 252, 0.8),
+		rgba(241, 245, 249, 0.6)
+	);
+	--maritime-gradient-surface-hover: linear-gradient(
+		145deg,
+		rgba(241, 245, 249, 0.9),
+		rgba(226, 232, 240, 0.7)
+	);
+	--maritime-gradient-header: linear-gradient(
+		135deg,
+		rgba(241, 245, 249, 0.8),
+		rgba(226, 232, 240, 0.6)
+	);
+	--maritime-gradient-hero: linear-gradient(
+		135deg,
+		rgba(248, 250, 252, 0.95),
+		rgba(241, 245, 249, 0.8)
+	);
+	--maritime-gradient-button: linear-gradient(
+		135deg,
+		var(--maritime-accent),
+		var(--maritime-accent-secondary)
+	);
 }
 
 /* Component-specific theme utilities */
@@ -149,28 +185,45 @@
 	transition: var(--maritime-transition);
 }
 
-.theme-status-critical { color: var(--maritime-status-critical); }
-.theme-status-high { color: var(--maritime-status-high); }
-.theme-status-medium { color: var(--maritime-status-medium); }
-.theme-status-low { color: var(--maritime-status-low); }
-.theme-status-resolved { color: var(--maritime-status-resolved); }
+.theme-status-critical {
+	color: var(--maritime-status-critical);
+}
+.theme-status-high {
+	color: var(--maritime-status-high);
+}
+.theme-status-medium {
+	color: var(--maritime-status-medium);
+}
+.theme-status-low {
+	color: var(--maritime-status-low);
+}
+.theme-status-resolved {
+	color: var(--maritime-status-resolved);
+}
 
 /* Explicit body theme styling to ensure background changes */
-:global(html), :global(body) {
+:global(html),
+:global(body) {
 	background: var(--maritime-bg-primary, #0a0f1c);
 	color: var(--maritime-text-primary, #f8fafc);
-	transition: background 0.3s ease, color 0.3s ease;
+	transition:
+		background 0.3s ease,
+		color 0.3s ease;
 	min-height: 100vh;
 }
 
 /* Maximum specificity for light theme */
-:global(html.light), :global(html.light body), :global(html.light > body) {
+:global(html.light),
+:global(html.light body),
+:global(html.light > body) {
 	background: #f8fafc !important;
 	color: #0f172a !important;
 }
 
 /* Maximum specificity for dark theme */
-:global(html.dark), :global(html.dark body), :global(html.dark > body) {
+:global(html.dark),
+:global(html.dark body),
+:global(html.dark > body) {
 	background: #0a0f1c !important;
 	color: #f8fafc !important;
 }

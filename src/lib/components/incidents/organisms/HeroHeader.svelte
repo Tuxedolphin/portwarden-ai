@@ -1,12 +1,12 @@
 <script>
 	import { Button } from '$lib/components/ui';
 	import StatsBar from '../molecules/StatsBar.svelte';
-	
-	let { 
-		title = "Incident Management",
-		subtitle = "Monitor and resolve port operations incidents in real-time",
+
+	let {
+		title = 'Incident Management',
+		subtitle = 'Monitor and resolve port operations incidents in real-time',
 		items = [],
-		onNewIncident 
+		onNewIncident
 	} = $props();
 </script>
 
@@ -34,11 +34,17 @@
 		padding: 3rem 2rem 2rem;
 		margin-bottom: 3rem;
 		overflow: hidden;
-		transition: background 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .hero-header {
-		background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.9) 100%);
+		background: linear-gradient(
+			135deg,
+			rgba(248, 250, 252, 0.95) 0%,
+			rgba(241, 245, 249, 0.9) 100%
+		);
 		border-bottom: 1px solid rgba(148, 163, 184, 0.3);
 	}
 
@@ -73,7 +79,7 @@
 		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 		transition: color 0.3s ease;
 	}
-	
+
 	:global(html.light) .hero-text h1 {
 		color: #0f172a !important;
 		text-shadow: 0 2px 10px rgba(255, 255, 255, 0.8);

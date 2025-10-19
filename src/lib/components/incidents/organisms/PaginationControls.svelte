@@ -1,14 +1,8 @@
 <script>
 	import { Button } from '$lib/components/ui';
-	
-	let { 
-		page, 
-		pageSize, 
-		total, 
-		onPrevious, 
-		onNext 
-	} = $props();
-	
+
+	let { page, pageSize, total, onPrevious, onNext } = $props();
+
 	const totalPages = $derived(Math.ceil(total / pageSize));
 	const canGoPrevious = $derived(page > 1);
 	const canGoNext = $derived(page < totalPages);
@@ -16,25 +10,13 @@
 
 {#if total > pageSize}
 	<div class="pagination">
-		<Button
-			variant="outline"
-			disabled={!canGoPrevious}
-			onclick={onPrevious}
-		>
-			Previous
-		</Button>
-		
+		<Button variant="outline" disabled={!canGoPrevious} onclick={onPrevious}>Previous</Button>
+
 		<span class="page-info">
 			Page {page} of {totalPages}
 		</span>
-		
-		<Button
-			variant="outline"
-			disabled={!canGoNext}
-			onclick={onNext}
-		>
-			Next
-		</Button>
+
+		<Button variant="outline" disabled={!canGoNext} onclick={onNext}>Next</Button>
 	</div>
 {/if}
 

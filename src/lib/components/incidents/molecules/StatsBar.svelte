@@ -1,11 +1,15 @@
 <script>
 	import StatItem from '../atoms/StatItem.svelte';
-	
+
 	let { items } = $props();
-	
+
 	const openCount = $derived(items.filter((/** @type {any} */ i) => i.status === 'open').length);
-	const inProgressCount = $derived(items.filter((/** @type {any} */ i) => i.status === 'in-progress').length);
-	const resolvedCount = $derived(items.filter((/** @type {any} */ i) => i.status === 'resolved').length);
+	const inProgressCount = $derived(
+		items.filter((/** @type {any} */ i) => i.status === 'in-progress').length
+	);
+	const resolvedCount = $derived(
+		items.filter((/** @type {any} */ i) => i.status === 'resolved').length
+	);
 	const totalCount = $derived(items.length);
 </script>
 

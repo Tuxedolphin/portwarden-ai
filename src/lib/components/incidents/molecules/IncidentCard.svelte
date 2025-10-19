@@ -1,14 +1,8 @@
 <script>
 	import { Button, Select, Card, CardHeader, CardContent, CardFooter } from '$lib/components/ui';
 	import IncidentTag from '../atoms/IncidentTag.svelte';
-	
-	let { 
-		incident, 
-		statusOptions, 
-		onStatusUpdate, 
-		onSelectForAI, 
-		onArchive 
-	} = $props();
+
+	let { incident, statusOptions, onStatusUpdate, onSelectForAI, onArchive } = $props();
 </script>
 
 <Card class="incident-card">
@@ -47,12 +41,8 @@
 			</span>
 		</div>
 		<div class="incident-actions">
-			<Button variant="secondary" size="sm" onclick={() => onSelectForAI(incident)}>
-				Ask AI
-			</Button>
-			<Button variant="outline" size="sm" onclick={() => onArchive(incident.id)}>
-				Archive
-			</Button>
+			<Button variant="secondary" size="sm" onclick={() => onSelectForAI(incident)}>Ask AI</Button>
+			<Button variant="outline" size="sm" onclick={() => onArchive(incident.id)}>Archive</Button>
 		</div>
 	</CardFooter>
 </Card>
