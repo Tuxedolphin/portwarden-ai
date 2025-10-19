@@ -2,51 +2,51 @@
   "articles": {
     "CNTR: Duplicate Container information received": {
       "title": "CNTR: Duplicate Container information received",
-      "accessCount": 46,
+      "accessCount": 47,
       "contexts": {
-        "playbook_generation": 32,
+        "playbook_generation": 33,
         "escalation_generation": 14
       },
       "effectiveness": 0,
       "resolutionCorrelation": [],
       "firstAccessed": "2025-10-18T03:07:29.364Z",
-      "lastAccessed": "2025-10-19T10:37:31.195Z"
+      "lastAccessed": "2025-10-19T13:50:18.321Z"
     },
     "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice": {
       "title": "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice",
-      "accessCount": 2,
+      "accessCount": 3,
       "contexts": {
-        "playbook_generation": 1,
+        "playbook_generation": 2,
         "escalation_generation": 1
       },
       "effectiveness": 0,
       "resolutionCorrelation": [],
       "firstAccessed": "2025-10-19T10:38:08.607Z",
-      "lastAccessed": "2025-10-19T10:38:09.243Z"
+      "lastAccessed": "2025-10-19T13:44:31.014Z"
     },
     "Check for active berth applications before expiring advice": {
       "title": "Check for active berth applications before expiring advice",
-      "accessCount": 2,
+      "accessCount": 3,
       "contexts": {
-        "playbook_generation": 1,
+        "playbook_generation": 2,
         "escalation_generation": 1
       },
       "effectiveness": 0,
       "resolutionCorrelation": [],
       "firstAccessed": "2025-10-19T10:38:08.608Z",
-      "lastAccessed": "2025-10-19T10:38:09.245Z"
+      "lastAccessed": "2025-10-19T13:44:31.015Z"
     },
     "Expire vessel advice via SQL maintenance window": {
       "title": "Expire vessel advice via SQL maintenance window",
-      "accessCount": 2,
+      "accessCount": 3,
       "contexts": {
-        "playbook_generation": 1,
+        "playbook_generation": 2,
         "escalation_generation": 1
       },
       "effectiveness": 0,
       "resolutionCorrelation": [],
       "firstAccessed": "2025-10-19T10:38:08.609Z",
-      "lastAccessed": "2025-10-19T10:38:09.246Z"
+      "lastAccessed": "2025-10-19T13:44:31.015Z"
     },
     "BAPLIE inconsistency for vessel plan": {
       "title": "BAPLIE inconsistency for vessel plan",
@@ -63,8 +63,8 @@
   },
   "summary": {
     "totalArticles": 0,
-    "totalUsage": 54,
+    "totalUsage": 58,
     "avgEffectiveness": 0,
-    "lastUpdated": "2025-10-19T10:39:09.532Z"
+    "lastUpdated": "2025-10-19T13:50:18.321Z"
   }
 }

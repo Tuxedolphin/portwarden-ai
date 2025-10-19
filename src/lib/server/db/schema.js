@@ -31,6 +31,7 @@ export const tags = mysqlTable('tags', {
 export const incidents = mysqlTable('incidents', {
 	id: bigint('id', { mode: 'number', unsigned: true }).primaryKey().autoincrement(),
 	title: varchar('title', { length: 255 }).notNull(),
+	caseCode: varchar('case_code', { length: 64 }).notNull(),
 	description: text('description').notNull(),
 	status: mysqlEnum('status', ['open', 'in-progress', 'resolved']).notNull().default('open'),
 	createdBy: bigint('created_by', { mode: 'number', unsigned: true })
@@ -41,7 +42,9 @@ export const incidents = mysqlTable('incidents', {
 		.notNull(),
 	updatedAt: datetime('updated_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
-		.notNull()
+		.notNull(),
+	ai_playbook: text('ai_playbook').default(''),
+	ai_escalation: text('ai_escalation').default('')
 });
 
 // Incident tags (many-to-many)

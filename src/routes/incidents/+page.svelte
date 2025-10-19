@@ -3,12 +3,12 @@
 	import Header from '$lib/components/Header.svelte';
 	import ErrorViewer from '$lib/ErrorViewer.svelte';
 	import { translateError } from '$lib/errorTranslator';
-	
+
 	// Import our new components
-	import { 
-		HeroHeader, 
-		IncidentGrid, 
-		CreateIncidentModal, 
+	import {
+		HeroHeader,
+		IncidentGrid,
+		CreateIncidentModal,
 		PaginationControls,
 		AIPanel
 	} from '$lib/components/incidents';
@@ -19,7 +19,7 @@
 	let page = 1;
 	let pageSize = 10;
 	let showCreate = false;
-	let title = '';
+	let code = '';
 	let description = '';
 	let tags = '';
 	let toast = '';
@@ -39,9 +39,9 @@
 
 	// Status options for Select component
 	const statusOptions = [
-		{ value: "open", label: "Open" },
-		{ value: "in-progress", label: "In Progress" },
-		{ value: "resolved", label: "Resolved" }
+		{ value: 'open', label: 'Open' },
+		{ value: 'in-progress', label: 'In Progress' },
+		{ value: 'resolved', label: 'Resolved' }
 	];
 
 	async function load() {
@@ -58,7 +58,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					title,
+					caseCode: code,
 					description,
 					tags: tags
 						.split(',')
@@ -66,12 +66,16 @@
 						.filter(Boolean)
 				})
 			});
+
 			const data = await res.json();
+
 			if (!res.ok) throw new Error(data?.error || 'Failed to create incident');
+
 			showCreate = false;
-			title = '';
+			code = '';
 			description = '';
 			tags = '';
+
 			await load();
 		} catch (e) {
 			toast = e instanceof Error ? e.message : 'Create failed';
@@ -185,10 +189,7 @@
 
 <Header />
 
-<HeroHeader 
-	{items} 
-	onNewIncident={() => (showCreate = true)} 
-/>
+<HeroHeader {items} onNewIncident={() => (showCreate = true)} />
 
 <!-- Main Content Section -->
 <section class="incidents-content">
@@ -196,7 +197,7 @@
 		<div class="toast">{toast}</div>
 	{/if}
 
-	<IncidentGrid 
+	<IncidentGrid
 		{items}
 		{statusOptions}
 		onStatusUpdate={updateStatus}
@@ -205,34 +206,15 @@
 		onCreateIncident={() => (showCreate = true)}
 	/>
 
-	<PaginationControls 
-		{page}
-		{pageSize}
-		{total}
-		onPrevious={handlePrevious}
-		onNext={handleNext}
-	/>
+	<PaginationControls {page} {pageSize} {total} onPrevious={handlePrevious} onNext={handleNext} />
 </section>
 
-<CreateIncidentModal 
+<CreateIncidentModal
 	bind:showCreate
-	bind:title
+	bind:code
 	bind:description
 	bind:tags
 	onCreateIncident={createIncident}
-/>
-
-<!-- AI Co-pilot Panel -->
-<AIPanel 
-	{selectedIncident}
-	bind:showAiPanel
-	bind:playbookOutput
-	bind:playbookPayload
-	bind:escalationOutput
-	bind:playbookLoading
-	bind:escalationLoading
-	bind:errorObj
-	onRequestGpt5={requestGpt5}
 />
 
 <style>
@@ -254,9 +236,12 @@
 		color: var(--maritime-status-critical, #fecaca);
 		margin-bottom: 2rem;
 		backdrop-filter: blur(10px);
-		transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			border-color 0.3s ease,
+			color 0.3s ease;
 	}
-	
+
 	:global(html.light) .toast {
 		background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
 		border: 1px solid rgba(248, 113, 113, 0.4);

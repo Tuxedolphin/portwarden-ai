@@ -1167,13 +1167,101 @@
       },
       "overallScore": 96,
       "passed": true
+    },
+    "VSL_1224835807_1760881500497": {
+      "testId": "VSL_1224835807_1760881500497",
+      "timestamp": "2025-10-19T13:45:00.497Z",
+      "query": "playbook for VESSEL_ERR_4 blocks vessel advice creation: Duty officer reporting that MV Lion City 07 returns VESSEL_ERR_4 when creating a new vessel advice from the portal.",
+      "aiResponse": "{\n  \"importantSafetyNotes\": [\n    \"Do not expire a vessel advice while an active berth application references it — this can disrupt vessel berthing and terminal operations. Confirm no active berth bookings first [KB-1754].\",\n    \"Any write to production vessel_advice must occur in an approved maintenance window with DB backups/snapshots taken beforehand to allow rollback if needed [KB-1767].\",\n    \"Validate changes in a read-only query first; avoid ad-hoc updates that could conflict with running operational processes.\",\n    \"Communicate clearly with Terminal Planning and Duty Operations before and after the change to avoid unintended movements or scheduling conflicts.\"\n  ],\n  \"actionSteps\": [\n    {\n      \"stepTitle\": \"Capture error evidence and correlation ID (logs)\",\n      \"executionContext\": \"shell (application logs)\",\n      \"procedure\": [\n        \"Locate and extract the relevant application log lines for correlation ID 9fa2e7c1afad4d6a to confirm the exact VESSEL_ERR_4 message and timestamp.\",\n        \"Save the log extract to the incident workspace and attach to the ticket for audit.\",\n        \"Reference KB-1749 when documenting the error context (System Vessel Name collision).\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Confirm any existing vessel advice that blocks creation (read-only DB) [KB-1749]\",\n      \"executionContext\": \"database (read-only)\",\n      \"procedure\": [\n        \"Run a SELECT against the vessel_advice table to find records for system_vessel_name = 'MV Lion City 07'.\",\n        \"Record vessel_advice_no and effective_end_datetime for any matches to determine if an active/overlapping advice exists.\",\n        \"If no records exist, escalate back to application team for further troubleshooting; otherwise proceed to check berth applications.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Verify berth applications referencing the advice (read-only DB) [KB-1754]\",\n      \"executionContext\": \"database (read-only)\",\n      \"procedure\": [\n        \"Query berth_application (or equivalent) to identify any active/queued berth applications referencing the vessel_advice_no(s) found in step 2.\",\n        \"If any berth application has status indicating active/assigned/reserved, do NOT expire the advice and coordinate with Terminal Planning to resolve the dependency.\",\n        \"If no active berth applications reference the advice, proceed with maintenance-window expiry as per KB-1767.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Schedule maintenance window and take DB backup/snapshot\",\n      \"executionContext\": \"operational coordination / database\",\n      \"procedure\": [\n        \"Coordinate with Terminal Planning, DBAs and Duty Operations to confirm a maintenance window for the write operation. Do not perform writes outside that window.\",\n        \"Take a database backup or snapshot that covers the vessel_advice table (document backup ID/location).\",\n        \"Announce the planned change to stakeholders and record the planned effective_end_datetime you will set (UTC).\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Expire legacy vessel advice (write to DB) [KB-1767]\",\n      \"executionContext\": \"database (write) - maintenance window\",\n      \"procedure\": [\n        \"Run the UPDATE to set effective_end_datetime for the legacy vessel_advice_no(s) identified in step 2. Use the planned timestamp agreed during the maintenance window.\",\n        \"Confirm the UPDATE affected the expected rows and commit the transaction. If unexpected rows are affected, rollback and escalate to DBAs.\",\n        \"Log the SQL command, user, timestamp and resulting rowcount as part of change evidence per KB-1767.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Verify resolution and allow portal retry\",\n      \"executionContext\": \"database (read-only) and portal/email\",\n      \"procedure\": [\n        \"Re-run the SELECT from step 2 to confirm the expired advice now has an effective_end_datetime that prevents overlap.\",\n        \"Attempt a portal create-simulation or ask the requestor to retry creating the vessel advice; confirm success.\",\n        \"Notify the requestor (include correlation ID 9fa2e7c1afad4d6a) that the legacy advice was expired and they may retry; reference KB-1767 for the change note.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Document actions and close incident\",\n      \"executionContext\": \"ticketing system / incident workspace\",\n      \"procedure\": [\n        \"Attach log extracts, SQL commands run, DB backup ID, maintenance window approval, and verification evidence to the incident.\",\n        \"Update the incident notes to state the root cause (name collision with existing vessel advice), actions taken, and confirmation that portal create now succeeds.\",\n        \"Mark the incident resolved once requestor confirms success and include references to KB-1749, KB-1754 and KB-1767 in the closure notes.\"\n      ]\n    }\n  ],\n  \"languageCommands\": [\n    {\n      \"language\": \"bash\",\n      \"command\": \"grep '9fa2e7c1afad4d6a' /var/log/vessel_advice_service.log\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT vessel_advice_no, system_vessel_name, effective_end_datetime FROM vessel_advice WHERE system_vessel_name = 'MV Lion City 07' ORDER BY effective_end_datetime NULLS FIRST;\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT application_id, status, vessel_advice_no FROM berth_application WHERE vessel_advice_no IN (SELECT vessel_advice_no FROM vessel_advice WHERE system_vessel_name = 'MV Lion City 07');\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"UPDATE vessel_advice SET effective_end_datetime = '2025-10-19 02:00:00' WHERE vessel_advice_no = '<ADVICE_NO>' AND (effective_end_datetime IS NULL OR effective_end_datetime > '2025-10-19 02:00:00');\"\n    },\n    {\n      \"language\": \"api\",\n      \"command\": \"curl -X POST -H \\\"Content-Type: application/json\\\" -d '{\\\"to\\\":\\\"requestor@example.com\\\",\\\"subject\\\":\\\"MV Lion City 07 - Vessel advice expired, please retry\\\",\\\"body\\\":\\\"We have expired legacy vessel advice <ADVICE_NO> so you can create a new advice for MV Lion City 07. Correlation ID: 9fa2e7c1afad4d6a.\\\"}' https://notifications.internal/api/sendEmail\"\n    }\n  ],\n  \"checklists\": [\n    {\n      \"title\": \"Pre-change checklist\",\n      \"items\": [\n        \"Confirm matching vessel_advice record(s) exist for 'MV Lion City 07' [KB-1749].\",\n        \"Confirm no active berth_application references the advice(s) [KB-1754].\",\n        \"Obtain maintenance window approval from Terminal Planning and DBAs.\",\n        \"Take a verified DB backup/snapshot and record backup ID/location [KB-1767].\",\n        \"Prepare the exact effective_end_datetime to set and document reason in change log.\"\n      ]\n    },\n    {\n      \"title\": \"Post-change checklist\",\n      \"items\": [\n        \"Verify UPDATE affected only intended vessel_advice_no(s).\",\n        \"Confirm portal create succeeds (requestor test or simulated create).\",\n        \"Capture and store verification SELECT output and portal success evidence.\",\n        \"Notify requestor with correlation ID and change details.\"\n      ]\n    },\n    {\n      \"title\": \"Ready to close\",\n      \"items\": [\n        \"Requestor confirms they can create the vessel advice for MV Lion City 07.\",\n        \"All evidence (logs, SQL commands, backup ID, approvals, verification) attached to incident.\",\n        \"Incident notes include KB references: KB-1749, KB-1754, KB-1767 and the correlation ID 9fa2e7c1afad4d6a.\",\n        \"No outstanding operational dependencies or active berth applications remain.\"\n      ]\n    }\n  ]\n}",
+      "module": "VSL",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: check vessel schedule",
+            "Missing required step: verify berth allocation",
+            "Missing required step: confirm ETA"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: port clearance procedures"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 89,
+      "passed": true
+    },
+    "CNTR_1336769417_1760881867132": {
+      "testId": "CNTR_1336769417_1760881867132",
+      "timestamp": "2025-10-19T13:51:07.132Z",
+      "query": "playbook for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "{\n  \"importantSafetyNotes\": [\n    \"Do not delete production rows without a verified backup and an auditable change record — perform all write operations inside transactions and keep copies of affected rows.\",\n    \"Minimize lock duration on the container table to avoid disrupting yard operations; run destructive changes during a low-activity window if locks are required.\",\n    \"Preserve original logs and evidence (container_service.log and DB export) to support audit and future troubleshooting per [KB-2210].\"\n  ],\n  \"actionSteps\": [\n    {\n      \"stepTitle\": \"Confirm duplicate snapshots exist (Detect) [runs: database, log server]\",\n      \"executionContext\": \"database (PostgreSQL) via read-only psql; log server via shell\",\n      \"procedure\": [\n        \"Inspect application log lines relating to DuplicateSnapshotAttempt for container CMAU0000020 to confirm timestamps and context (container_service.log).\",\n        \"Run a read-only query to list all container rows for cntr_no=CMAU0000020 and capture IDs, snapshot timestamps, and created/updated timestamps.\",\n        \"Record the number of duplicates and copy the query results to a timestamped evidence file for the incident record (do not modify data in this step).\",\n        \"Reference [KB-2210] CNTR-024 detection guidance to validate that these rows meet 'duplicate snapshot' criteria before remediation.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Take immutable backup of affected rows (Protect) [runs: database, shell]\",\n      \"executionContext\": \"database (PostgreSQL) via psql invoked from shell on DB host or backup host\",\n      \"procedure\": [\n        \"Export all rows for cntr_no=CMAU0000020 into a timestamped CSV/SQL file and store it to an immutable backup location (S3 or read-only backup share).\",\n        \"Ensure the backup file is named with incident ID (ALR-861600) and timestamp and that a copy is retained in the incident evidence store.\",\n        \"Do not perform any DELETE/UPDATE until backup is confirmed and checksum verified.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Retain most recent snapshot only (Remediate) [runs: database]\",\n      \"executionContext\": \"database (PostgreSQL) via psql (write transaction) on primary DB host\",\n      \"procedure\": [\n        \"Within a single transaction, identify the most-recent snapshot row for CMAU0000020 by snapshot_ts (or created_at) and move/mark all other rows as archived per [KB-2210].\",\n        \"Prefer soft-archive (set archived=true, archived_at=now()) when schema supports it to preserve auditability; if not possible, move older rows to a container_archive table.\",\n        \"Commit the transaction and capture the list of changed row IDs, before/after counts, and any errors to the incident record.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Rebuild cache consumers and downstream sync (Notify / Reconcile) [runs: API, application console]\",\n      \"executionContext\": \"API (internal sync endpoint) invoked from operations network; application cache control via app console or orchestration API\",\n      \"procedure\": [\n        \"Trigger the internal container reconciliation/sync endpoint to force downstream cache consumers and APIs to refresh state for CMAU0000020.\",\n        \"If the platform has a cache invalidation or message bus (e.g., Redis, Kafka), publish an explicit event for the container id or use the documented cache-rebuild command from [KB-2210].\",\n        \"Monitor logs and API consumer health for errors during propagation; collect timestamps when consumers acknowledge the updated state.\"\n      ]\n    },\n    {\n      \"stepTitle\": \"Verify corrected state and close incident (Verify) [runs: database, API, log server]\",\n      \"executionContext\": \"database (psql read), API (internal GET), log server (shell)\",\n      \"procedure\": [\n        \"Re-run the read-only query to ensure only one active snapshot row exists for CMAU0000020 and archive table (if used) contains the older rows.\",\n        \"Query or call API consumers to confirm they return the corrected yard inventory view for CMAU0000020.\",\n        \"Check application logs (container_service.log) for re-occurrence of DuplicateSnapshotAttempt warnings after remediation.\",\n        \"Document actions taken, include backup and change evidence, and mark the incident ALR-861600 as closed if all verifications pass.\"\n      ]\n    }\n  ],\n  \"languageCommands\": [\n    {\n      \"language\": \"bash\",\n      \"command\": \"tail -n 200 /var/log/container_service.log | grep CMAU0000020\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"SELECT id, cntr_no, snapshot_ts, created_at, updated_at FROM container WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC, created_at DESC;\"\n    },\n    {\n      \"language\": \"bash\",\n      \"command\": \"psql -h dbhost -U portuser -d vessels -c \\\"COPY (SELECT * FROM container WHERE cntr_no='CMAU0000020') TO STDOUT WITH CSV HEADER\\\" > /var/backups/ALR-861600_CMAU0000020_$(date +%Y%m%dT%H%M%SZ).csv\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"BEGIN; WITH keep AS (SELECT id FROM container WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC, created_at DESC LIMIT 1) UPDATE container SET archived = TRUE, archived_at = now(), updated_by = 'portwarden' WHERE cntr_no='CMAU0000020' AND id NOT IN (SELECT id FROM keep); COMMIT;\"\n    },\n    {\n      \"language\": \"sql\",\n      \"command\": \"BEGIN; CREATE TABLE IF NOT EXISTS container_archive (LIKE container INCLUDING ALL); WITH keep AS (SELECT id FROM container WHERE cntr_no='CMAU0000020' ORDER BY snapshot_ts DESC, created_at DESC LIMIT 1) INSERT INTO container_archive SELECT * FROM container WHERE cntr_no='CMAU0000020' AND id NOT IN (SELECT id FROM keep); DELETE FROM container WHERE cntr_no='CMAU0000020' AND id NOT IN (SELECT id FROM keep); COMMIT;\"\n    },\n    {\n      \"language\": \"api\",\n      \"command\": \"curl -X POST -H \\\"Authorization: Bearer $SYNC_TOKEN\\\" -H \\\"Content-Type: application/json\\\" https://internal-api.example/v1/sync/containers/CMAU0000020/reconcile\"\n    },\n    {\n      \"language\": \"api\",\n      \"command\": \"curl -H \\\"Authorization: Bearer $API_TOKEN\\\" https://internal-api.example/v1/containers/CMAU0000020 | jq '.'\"\n    }\n  ],\n  \"checklists\": [\n    {\n      \"title\": \"Pre-execution checks\",\n      \"items\": [\n        \"Confirm correct DB host, database name, and credentials for write operations.\",\n        \"Verify an immutable backup of affected rows has been exported and stored with incident ID ALR-861600.\",\n        \"Notify on-call yard operations that a brief DB write operation will occur (no escalation required).\",\n        \"Confirm change process and approvals per [KB-2210] are available in the incident record.\"\n      ]\n    },\n    {\n      \"title\": \"Post-remediation verification\",\n      \"items\": [\n        \"One and only one active snapshot row exists for CMAU0000020 in the container table.\",\n        \"Older snapshot rows are present in container_archive or are marked archived with archived_at timestamp.\",\n        \"Downstream API and cache consumers report the corrected state for CMAU0000020.\",\n        \"No new DuplicateSnapshotAttempt warnings for CMAU0000020 appear in container_service.log for the monitoring window.\"\n      ]\n    },\n    {\n      \"title\": \"Ready to close\",\n      \"items\": [\n        \"All verification checks passed and evidence files (SQL/CSV exports, log snippets, change transaction IDs) are attached to the incident.\",\n        \"Incident ALR-861600 documented with steps taken and link to [KB-2210] guidance.\",\n        \"Stakeholders notified of resolution and monitoring plan in place for recurrence.\"\n      ]\n    }\n  ]\n}",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
     }
   },
   "summary": {
-    "totalTests": 26,
-    "passedTests": 26,
+    "totalTests": 28,
+    "passedTests": 28,
     "failedTests": 0,
     "avgAccuracy": 86,
-    "lastRun": "2025-10-19T10:39:44.150Z"
+    "lastRun": "2025-10-19T13:51:07.135Z"
   }
 }

@@ -7,7 +7,13 @@
 
 <Card class="incident-card">
 	<CardHeader class="incident-header">
-		<div class="incident-id">#{incident.id}</div>
+		<div class="incident-id">
+			{#if incident.caseCode}
+				{incident.caseCode}
+			{:else}
+				#{incident.id}
+			{/if}
+		</div>
 		<div class="status-dropdown">
 			<Select
 				variant="status"

@@ -377,6 +377,34 @@
       "context": "playbook_generation",
       "sessionId": "session_1760870349532_7417g3alv",
       "day": "2025-10-19"
+    },
+    {
+      "timestamp": "2025-10-19T13:44:31.014Z",
+      "articleTitle": "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice",
+      "context": "playbook_generation",
+      "sessionId": "session_1760881471013_o23vsqnne",
+      "day": "2025-10-19"
+    },
+    {
+      "timestamp": "2025-10-19T13:44:31.015Z",
+      "articleTitle": "Check for active berth applications before expiring advice",
+      "context": "playbook_generation",
+      "sessionId": "session_1760881471013_o23vsqnne",
+      "day": "2025-10-19"
+    },
+    {
+      "timestamp": "2025-10-19T13:44:31.015Z",
+      "articleTitle": "Expire vessel advice via SQL maintenance window",
+      "context": "playbook_generation",
+      "sessionId": "session_1760881471013_o23vsqnne",
+      "day": "2025-10-19"
+    },
+    {
+      "timestamp": "2025-10-19T13:50:18.321Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760881818321_ul5xma1iw",
+      "day": "2025-10-19"
     }
   ],
   "dailyStats": {
@@ -389,13 +417,13 @@
     },
     "2025-10-19": {
       "articles": {
-        "CNTR: Duplicate Container information received": 17,
-        "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice": 2,
-        "Check for active berth applications before expiring advice": 2,
-        "Expire vessel advice via SQL maintenance window": 2,
+        "CNTR: Duplicate Container information received": 18,
+        "VAS: VESSEL_ERR_4 Vessel Name has been used by other vessel advice": 3,
+        "Check for active berth applications before expiring advice": 3,
+        "Expire vessel advice via SQL maintenance window": 3,
         "BAPLIE inconsistency for vessel plan": 2
       },
-      "totalAccess": 25,
+      "totalAccess": 29,
       "uniqueArticles": 5
     }
   },

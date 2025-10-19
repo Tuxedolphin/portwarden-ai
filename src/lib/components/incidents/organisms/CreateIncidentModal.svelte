@@ -3,7 +3,7 @@
 
 	let {
 		showCreate = $bindable(),
-		title = $bindable(''),
+		code = $bindable(''),
 		description = $bindable(''),
 		tags = $bindable(''),
 		onCreateIncident
@@ -26,12 +26,12 @@
 				}}
 			>
 				<div class="form-group">
-					<label for="title">Incident Title</label>
+					<label for="title">Incident Code</label>
 					<input
 						id="title"
 						type="text"
-						bind:value={title}
-						placeholder="Enter incident title"
+						bind:value={code}
+						placeholder="Enter incident code"
 						required
 					/>
 				</div>
@@ -41,7 +41,7 @@
 					<textarea
 						id="description"
 						bind:value={description}
-						placeholder="Describe the incident in detail"
+						placeholder="Enter Incident Description"
 						rows="4"
 						required
 					></textarea>
