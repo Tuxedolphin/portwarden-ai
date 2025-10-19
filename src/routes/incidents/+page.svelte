@@ -28,6 +28,8 @@
 	/** @type {any | null} */
 	let selectedIncident = null;
 	let playbookOutput = '';
+	/** @type {import('$lib/types/playbook').PlaybookPayload | null} */
+	let playbookPayload = null;
 	let escalationOutput = '';
 	let playbookLoading = false;
 	let escalationLoading = false;
@@ -109,6 +111,7 @@
 	function selectIncidentForAI(incident) {
 		selectedIncident = incident;
 		playbookOutput = '';
+		playbookPayload = null;
 		escalationOutput = '';
 		errorObj = null;
 		showAiPanel = true;
@@ -147,12 +150,16 @@
 
 			if (type === 'playbook') {
 				playbookOutput = data.output || '';
+				playbookPayload = data.payload ?? null;
 			} else {
 				escalationOutput = data.output || '';
 			}
 		} catch (e) {
 			console.error('GPT-5 request failed:', e);
 			errorObj = translateError(e);
+			if (type === 'playbook') {
+				playbookPayload = null;
+			}
 		} finally {
 			if (type === 'playbook') {
 				playbookLoading = false;
@@ -220,6 +227,7 @@
 	{selectedIncident}
 	bind:showAiPanel
 	bind:playbookOutput
+	bind:playbookPayload
 	bind:escalationOutput
 	bind:playbookLoading
 	bind:escalationLoading

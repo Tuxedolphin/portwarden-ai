@@ -16,10 +16,71 @@ const validator = new ValidationFramework();
 
 const SYSTEM_TEXT = `You are Portwarden AI, a maritime duty officer co-pilot.
 - Generate numbered action steps with clear labels
-- Use code blocks for SQL/API calls (labeled with type)
+- Call out where each action runs (database, shell, API, console, etc.)
 - Reference KB articles using provided IDs [KB-1749]
 - Professional tone, operational focus, prioritize safety
-- Include verification steps`;
+- Follow response format instructions exactly when supplied`;
+
+const PLAYBOOK_SCHEMA = {
+	type: 'object',
+	additionalProperties: false,
+	required: ['importantSafetyNotes', 'actionSteps', 'languageCommands', 'checklists'],
+	properties: {
+		importantSafetyNotes: {
+			type: 'array',
+			minItems: 1,
+			items: { type: 'string', minLength: 1 }
+		},
+		actionSteps: {
+			type: 'array',
+			minItems: 1,
+			items: {
+				type: 'object',
+				required: ['stepTitle', 'executionContext', 'procedure'],
+				additionalProperties: false,
+				properties: {
+					stepTitle: { type: 'string', minLength: 1 },
+					executionContext: { type: 'string', minLength: 1 },
+					procedure: {
+						type: 'array',
+						minItems: 1,
+						items: { type: 'string', minLength: 1 }
+					}
+				}
+			}
+		},
+		languageCommands: {
+			type: 'array',
+			minItems: 1,
+			items: {
+				type: 'object',
+				required: ['language', 'command'],
+				additionalProperties: false,
+				properties: {
+					language: { type: 'string', minLength: 1 },
+					command: { type: 'string', minLength: 1 }
+				}
+			}
+		},
+		checklists: {
+			type: 'array',
+			minItems: 1,
+			items: {
+				type: 'object',
+				required: ['title', 'items'],
+				additionalProperties: false,
+				properties: {
+					title: { type: 'string', minLength: 1 },
+					items: {
+						type: 'array',
+						minItems: 1,
+						items: { type: 'string', minLength: 1 }
+					}
+				}
+			}
+		}
+	}
+};
 
 /**
  * @param {import('$lib/data/incidents').Incident} incident
@@ -75,7 +136,12 @@ function buildPrompt(incident, intent, sessionId) {
 
 	const intentInstruction =
 		intent === 'playbook'
-			? 'Generate step-by-step playbook with verification checks. Reference KB articles. Include "Ready to close" checklist.'
+			? `Respond strictly in JSON using these top-level keys:
+	- importantSafetyNotes: array of safety-critical callouts (strings only).
+	- actionSteps: ordered array where each object contains stepTitle, executionContext (note exactly where the work runs), procedure (array of concise instructions).
+	- languageCommands: array of objects with language (e.g. "sql", "bash", "api") and command (exact string, no markdown fences).
+	- checklists: array of objects with title and items (array of checklist bullet strings, include a "Ready to close" list when relevant).
+	Do not include any markdown or commentary outside the JSON object.`
 			: 'Draft escalation summary <180 words: incident snapshot, mitigation, risks, ask, timeline.';
 
 	// Compact prompt structure
@@ -170,13 +236,24 @@ export async function POST(event) {
 	console.log('- Total tokens (approx):', Math.ceil((SYSTEM_TEXT.length + prompt.length) / 4));
 	console.log('- Session ID:', sessionId);
 
-	const requestBody = {
+	const requestBody = /** @type {Record<string, any>} */ ({
 		model,
 		messages: [
 			{ role: 'system', content: SYSTEM_TEXT },
 			{ role: 'user', content: prompt }
 		]
-	};
+	});
+
+	if (intent === 'playbook') {
+		requestBody.response_format = {
+			type: 'json_schema',
+			json_schema: {
+				name: 'portwarden_playbook',
+				strict: true,
+				schema: PLAYBOOK_SCHEMA
+			}
+		};
+	}
 
 	const response = await fetch(requestUrl, {
 		method: 'POST',
@@ -249,6 +326,24 @@ export async function POST(event) {
 		);
 	}
 
+	let playbookPayload = null;
+	if (intent === 'playbook') {
+		const parsed = parsePlaybookJson(output);
+		if (!parsed.ok) {
+			console.error('Playbook parsing failed:', parsed.error, { output });
+			return json(
+				{
+					error: 'Playbook response was not valid JSON.',
+					reason: parsed.error
+				},
+				{ status: 502 }
+			);
+		}
+
+		playbookPayload = parsed.value;
+		output = JSON.stringify(playbookPayload, null, 2);
+	}
+
 	// Validate the AI response for quality and compliance
 	try {
 		const module = extractModuleFromIncident(incident);
@@ -272,6 +367,7 @@ export async function POST(event) {
 
 	return json({
 		output,
+		...(playbookPayload ? { payload: playbookPayload } : {}),
 		sessionId,
 		metadata: {
 			model,
@@ -281,4 +377,215 @@ export async function POST(event) {
 			timestamp: new Date().toISOString()
 		}
 	});
+}
+
+/**
+ * @param {string} raw
+ * @returns {{ ok: true, value: {
+ *   importantSafetyNotes: string[];
+ *   actionSteps: Array<{ stepTitle: string; executionContext: string; procedure: string[] }>;
+ *   languageCommands: Array<{ language: string; command: string }>;
+ *   checklists: Array<{ title: string; items: string[] }>;
+ * }} | { ok: false, error: string }}
+ */
+function parsePlaybookJson(raw) {
+	const cleaned = stripJsonFences(raw);
+	let data;
+	try {
+		data = JSON.parse(cleaned);
+	} catch (error) {
+		return { ok: false, error: 'INVALID_JSON' };
+	}
+
+	if (!data || typeof data !== 'object' || Array.isArray(data)) {
+		return { ok: false, error: 'INVALID_STRUCTURE' };
+	}
+
+	const importantSafetyNotes = sanitizeStringArray(data.importantSafetyNotes);
+	const actionSteps = sanitizeActionSteps(data.actionSteps);
+	const languageCommands = sanitizeCommands(data.languageCommands);
+	const checklists = sanitizeChecklists(data.checklists);
+
+	if (!importantSafetyNotes.length || !actionSteps.length || !languageCommands.length || !checklists.length) {
+		return { ok: false, error: 'MISSING_FIELDS' };
+	}
+
+	return {
+		ok: true,
+		value: {
+			importantSafetyNotes,
+			actionSteps,
+			languageCommands,
+			checklists
+		}
+	};
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function sanitizeStringArray(value) {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((item) => normalizeNarrative(item))
+		.filter((item) => item.length > 0);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Array<{ stepTitle: string; executionContext: string; procedure: string[] }>}
+ */
+function sanitizeActionSteps(value) {
+	if (!Array.isArray(value)) return [];
+	const steps = [];
+	for (const entry of value) {
+		if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+		const stepTitle = normalizeHeading(entry.stepTitle);
+		const executionContext = normalizeNarrative(entry.executionContext);
+		const procedure = coerceStringList(entry.procedure);
+
+		if (!stepTitle || !executionContext || !procedure.length) continue;
+
+		steps.push({ stepTitle, executionContext, procedure });
+	}
+	return steps;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Array<{ language: string; command: string }>}
+ */
+function sanitizeCommands(value) {
+	if (!Array.isArray(value)) return [];
+	const result = [];
+	for (const entry of value) {
+		if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+		let language = '';
+		let command = '';
+		if (typeof entry.language === 'string') {
+			language = normalizeLanguageKey(entry.language);
+		}
+		if (typeof entry.command === 'string') {
+			command = normalizeCommand(entry.command);
+		}
+		// Gracefully handle legacy dictionary format { sql: "..." }
+		if ((!language || !command) && Object.keys(entry).length === 1) {
+			const [legacyLanguage, legacyCommand] = Object.entries(entry)[0];
+			if (typeof legacyCommand === 'string') {
+				language = normalizeLanguageKey(legacyLanguage);
+				command = normalizeCommand(legacyCommand);
+			}
+		}
+		if (!language || !command) continue;
+		result.push({ language, command });
+	}
+	return result;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Array<{ title: string; items: string[] }>}
+ */
+function sanitizeChecklists(value) {
+	if (!Array.isArray(value)) return [];
+	const lists = [];
+	for (const entry of value) {
+		if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+		const title = normalizeHeading(entry.title);
+		const items = coerceStringList(entry.items);
+		if (!title || !items.length) continue;
+		lists.push({ title, items });
+	}
+	return lists;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function coerceStringList(value) {
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => normalizeNarrative(item))
+			.filter((item) => item.length > 0);
+	}
+	if (typeof value === 'string') {
+		return value
+			.split(/\n+/)
+			.map((item) => normalizeNarrative(item))
+			.filter((item) => item.length > 0);
+	}
+	return [];
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function normalizeNarrative(value) {
+	if (typeof value !== 'string') return '';
+	return value
+		.replace(/\r\n?/g, '\n')
+		.split('\n')
+		.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+		.filter((line) => line.length > 0)
+		.join(' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function normalizeHeading(value) {
+	if (typeof value !== 'string') return '';
+	return value
+		.replace(/\r\n?/g, ' ')
+		.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function normalizeLanguageKey(value) {
+	if (typeof value !== 'string') return '';
+	return value.trim().toLowerCase();
+}
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+function normalizeCommand(command) {
+	return stripCodeFences(command)
+		.split('\n')
+		.map((line) => line.replace(/^\s+/, ''))
+		.join('\n')
+		.trim();
+}
+
+/**
+ * Remove wrapping markdown code fences but keep inner content.
+ * @param {string} value
+ * @returns {string}
+ */
+function stripCodeFences(value) {
+	let output = value.trim();
+	if (/^```/.test(output)) {
+		output = output.replace(/^```[a-zA-Z0-9+-]*\s*/g, '').replace(/```$/g, '');
+	}
+	return output.replace(/\r\n?/g, '\n');
+}
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+function stripJsonFences(raw) {
+	return raw.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
 }
