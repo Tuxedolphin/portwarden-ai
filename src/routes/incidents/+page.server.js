@@ -1,4 +1,3 @@
-import { redirect } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 
 /** @param {import('@sveltejs/kit').RequestEvent} event */

@@ -104,12 +104,7 @@
 				/>
 			</div>
 
-			<Button 
-				type="submit" 
-				class="w-full mt-2" 
-				size="lg"
-				{loading}
-			>
+			<Button type="submit" class="mt-2 w-full" size="lg" {loading}>
 				{mode === 'login' ? 'Sign In' : 'Create Account'}
 			</Button>
 		</form>
@@ -118,14 +113,18 @@
 			{#if mode === 'login'}
 				<p>
 					Don't have an account?
-					<Button variant="link" class="p-0 h-auto text-blue-400" onclick={() => (mode = 'register')}>
+					<Button
+						variant="link"
+						class="h-auto p-0 text-blue-400"
+						onclick={() => (mode = 'register')}
+					>
 						Create one here
 					</Button>
 				</p>
 			{:else}
 				<p>
 					Already have an account?
-					<Button variant="link" class="p-0 h-auto text-blue-400" onclick={() => (mode = 'login')}>
+					<Button variant="link" class="h-auto p-0 text-blue-400" onclick={() => (mode = 'login')}>
 						Sign in instead
 					</Button>
 				</p>
@@ -190,7 +189,7 @@
 		overflow: hidden;
 		transition: all 0.3s ease;
 	}
-	
+
 	:global(html.light) .auth-card {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.8));
 		border: 1px solid rgba(148, 163, 184, 0.3);
@@ -206,7 +205,12 @@
 		left: 0;
 		right: 0;
 		height: 4px;
-		background: linear-gradient(90deg, var(--maritime-accent, #60a5fa), var(--maritime-accent-secondary, #34d399), #fbbf24);
+		background: linear-gradient(
+			90deg,
+			var(--maritime-accent, #60a5fa),
+			var(--maritime-accent-secondary, #34d399),
+			#fbbf24
+		);
 	}
 
 	@keyframes slideUp {
@@ -229,7 +233,11 @@
 		font-size: 2.5rem;
 		font-weight: 800;
 		margin: 0 0 1rem;
-		background: linear-gradient(135deg, var(--maritime-accent, #60a5fa), var(--maritime-accent-secondary, #34d399));
+		background: linear-gradient(
+			135deg,
+			var(--maritime-accent, #60a5fa),
+			var(--maritime-accent-secondary, #34d399)
+		);
 		background-clip: text;
 		-webkit-background-clip: text;
 		color: transparent;
@@ -290,7 +298,7 @@
 		letter-spacing: 0.02em;
 		transition: color 0.3s ease;
 	}
-	
+
 	/* Force light theme label color */
 	:global(html.light) .input-group label {
 		color: #1e293b !important;
@@ -306,7 +314,7 @@
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 		backdrop-filter: blur(10px);
 	}
-	
+
 	:global(html.light) .input-group input {
 		background: rgba(248, 250, 252, 0.8);
 		border: 1px solid rgba(148, 163, 184, 0.4);
@@ -322,7 +330,7 @@
 			0 10px 25px -10px rgba(96, 165, 250, 0.2);
 		transform: translateY(-2px);
 	}
-	
+
 	:global(html.light) .input-group input:focus {
 		background: rgba(248, 250, 252, 0.95);
 	}
@@ -387,7 +395,6 @@
 		.input-group input {
 			padding: 0.875rem 1rem;
 		}
-
 	}
 
 	/* Accessibility */

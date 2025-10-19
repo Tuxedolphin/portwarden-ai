@@ -183,11 +183,17 @@
 		padding: 3rem 2rem 2rem;
 		margin-bottom: 3rem;
 		overflow: hidden;
-		transition: background 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .hero-header {
-		background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.9) 100%);
+		background: linear-gradient(
+			135deg,
+			rgba(248, 250, 252, 0.95) 0%,
+			rgba(241, 245, 249, 0.9) 100%
+		);
 		border-bottom: 1px solid rgba(148, 163, 184, 0.3);
 	}
 
@@ -219,7 +225,7 @@
 		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 		transition: color 0.3s ease;
 	}
-	
+
 	/* Force light theme color for archive title */
 	:global(html.light) .hero-text h1 {
 		color: #0f172a !important;
@@ -240,9 +246,11 @@
 		border-radius: 1.5rem;
 		padding: 2rem;
 		backdrop-filter: blur(10px);
-		transition: background 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .filter-panel {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.6));
 		border: 1px solid rgba(148, 163, 184, 0.3);
@@ -266,7 +274,7 @@
 		transition: all 0.2s ease;
 		backdrop-filter: blur(10px);
 	}
-	
+
 	:global(html.light) .search-input,
 	:global(html.light) .tag-input {
 		background: rgba(248, 250, 252, 0.8);
@@ -286,7 +294,11 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 1rem 2rem;
-		background: linear-gradient(135deg, var(--maritime-accent, #3b82f6), var(--maritime-accent-secondary, #1d4ed8));
+		background: linear-gradient(
+			135deg,
+			var(--maritime-accent, #3b82f6),
+			var(--maritime-accent-secondary, #1d4ed8)
+		);
 		color: white !important; /* Button text should remain white on blue background */
 		border: none;
 		border-radius: 1rem;
@@ -322,9 +334,12 @@
 		border: 1px solid rgba(148, 163, 184, 0.2);
 		border-radius: 1.5rem;
 		backdrop-filter: blur(10px);
-		transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+		transition:
+			transform 0.3s ease,
+			background 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .stat-card {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.6));
 		border: 1px solid rgba(148, 163, 184, 0.3);
@@ -378,7 +393,7 @@
 		transition: all 0.3s ease;
 		box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
 	}
-	
+
 	:global(html.light) .archive-card {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.6));
 		border: 1px solid rgba(148, 163, 184, 0.3);
@@ -390,7 +405,7 @@
 		border-color: rgba(96, 165, 250, 0.4);
 		box-shadow: 0 20px 50px -10px rgba(96, 165, 250, 0.2);
 	}
-	
+
 	:global(html.light) .archive-card:hover {
 		box-shadow: 0 20px 50px -10px rgba(96, 165, 250, 0.15);
 	}
@@ -429,7 +444,10 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			color 0.3s ease,
+			border-color 0.3s ease;
 	}
 
 	.status-badge.archived {
@@ -437,7 +455,7 @@
 		color: var(--maritime-text-muted, #cbd5e1);
 		border: 1px solid rgba(148, 163, 184, 0.3);
 	}
-	
+
 	:global(html.light) .status-badge.archived {
 		background: linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.2));
 		color: var(--maritime-text-primary, #1e293b);
@@ -478,9 +496,12 @@
 		font-size: 0.8rem;
 		font-weight: 500;
 		border: 1px solid rgba(148, 163, 184, 0.3);
-		transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			color 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .archive-tag {
 		background: linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.2));
 		color: var(--maritime-text-primary, #1e293b);
@@ -495,7 +516,7 @@
 		gap: 0.5rem;
 		transition: border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .archive-footer {
 		border-top: 1px solid rgba(148, 163, 184, 0.2);
 	}
@@ -531,9 +552,11 @@
 		border: 2px dashed rgba(148, 163, 184, 0.3);
 		border-radius: 2rem;
 		backdrop-filter: blur(10px);
-		transition: background 0.3s ease, border-color 0.3s ease;
+		transition:
+			background 0.3s ease,
+			border-color 0.3s ease;
 	}
-	
+
 	:global(html.light) .empty-archive {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.6), rgba(241, 245, 249, 0.4));
 		border: 2px dashed rgba(148, 163, 184, 0.4);
@@ -595,7 +618,7 @@
 		transition: all 0.2s ease;
 		font-weight: 500;
 	}
-	
+
 	:global(html.light) .page-btn {
 		background: linear-gradient(145deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.6));
 		color: var(--maritime-text-primary, #0f172a);
