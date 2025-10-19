@@ -10,6 +10,7 @@
 	/** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
 	let errorObj = null;
 
+	/** @type {{ result?: { notes?: any[]; steps?: any[]; code_to_be_ran?: any[]; checklists?: any[] } } | null} */
 	let threadInit = null;
 	let threadError = '';
 	let threadLoading = false;

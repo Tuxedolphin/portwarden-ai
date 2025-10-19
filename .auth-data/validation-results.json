@@ -311,13 +311,58 @@
       },
       "overallScore": 86,
       "passed": true
+    },
+    "CNTR_1336769417_1760808325021": {
+      "testId": "CNTR_1336769417_1760808325021",
+      "timestamp": "2025-10-18T17:25:25.021Z",
+      "query": "playbook for Duplicate container snapshot detected: Data quality monitor detected that container CMAU0000020 was inserted twice within one second, creating inconsistent yard inventory views.",
+      "aiResponse": "Subject: ALR-861600 — Playbook: Duplicate container snapshot detected (CMAU0000020)\n\nSummary: Data quality monitor flagged duplicate snapshots for container CMAU0000020. Follow these steps to confirm, remediate (retain most recent snapshot), and force downstream consumers to pick up the corrected state. No escalation required. Primary guidance: [KB-2210] CNTR-024 (Duplicate Container information received). See also [KB-1749] for data-correction best practices.\n\nAction steps (numbered, with verification)\n\n1) ACTION 01 — Take an immediate backup of affected records (safety first)\n- Purpose: Ensure recoverability before making any DB changes.\n- Steps:\n  - Export the active rows for container CMAU0000020 and the table schema to a secure location.\n- Commands:\n  [SQL]\n  ```\n  -- Export rows for CMAU0000020 to an offline file (adjust path/user)\n  SELECT * FROM container\n   WHERE cntr_no = 'CMAU0000020'\n  INTO OUTFILE '/var/backups/cntr_CMAU0000020_$(date +%s).csv'\n  FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\n';\n  ```\n- Verification:\n  - Confirm file exists and contains all rows found.\n  - Check checksum and store backup path in incident log.\n\n2) ACTION 02 — Detect and confirm duplicate snapshots (KB-2210)\n- Purpose: Confirm that multiple snapshot rows exist and capture evidence.\n- Steps:\n  - Query database for duplicate snapshots within short time windows.\n  - Cross-check application log entry.\n- Commands:\n  [SQL]\n  ```\n  -- Find all rows for CMAU0000020\n  SELECT id, cntr_no, version, created_at, updated_at, status, metadata\n    FROM container\n   WHERE cntr_no = 'CMAU0000020'\n   ORDER BY created_at DESC;\n  ```\n  [LOG CHECK — shell]\n  ```\n  # Search logs for the warning\n  grep \"DuplicateSnapshotAttempt\" /var/log/container_service.log | grep \"CMAU0000020\" || true\n  ```\n- Evidence to collect:\n  - DB rows (output of SQL).\n  - Log lines: \"WARN container-version DuplicateSnapshotAttempt cntr_no=CMAU0000020...\"\n- Verification:\n  - Confirm >1 row listed for CMAU0000020.\n  - Confirm the log entry exists and timestamp(s) align with DB rows.\n\n3) ACTION 03 — Identify the single snapshot to retain (most recent) (KB-2210)\n- Purpose: Decide which row represents the authoritative operational state.\n- Steps:\n  - Choose the snapshot with the latest created_at (or highest version/id if created_at identical).\n- Commands:\n  [SQL]\n  ```\n  -- Identify the single row to keep (most recent)\n  SELECT id, cntr_no, version, created_at, updated_at\n    FROM container\n   WHERE cntr_no = 'CMAU0000020'\n   ORDER BY\n     COALESCE(created_at, '1970-01-01') DESC,\n     COALESCE(version, 0) DESC,\n     id DESC\n   LIMIT 1;\n  ```\n- Verification:\n  - Note the chosen id; add to incident log as \"retain_id\".\n\n4) ACTION 04 — Archive older duplicate rows (KB-2210)\n- Purpose: Preserve history while removing inconsistent active duplicates.\n- Steps:\n  - Insert older rows into an archive table (or set archived flag) and then remove them from active table in a single transaction.\n  - Use transaction to ensure atomicity.\n- Commands:\n  [SQL]\n  ```\n  START TRANSACTION;\n\n  -- Create archive table if not exists (one-time safe op)\n  CREATE TABLE IF NOT EXISTS container_archive LIKE container;\n\n  -- Insert older rows (exclude the retained id) into archive\n  INSERT INTO container_archive\n  SELECT *, NOW() AS archived_at, 'ALR-861600 duplicate snapshot archive' AS archive_reason\n    FROM container\n   WHERE cntr_no = 'CMAU0000020'\n     AND id <> <RETAIN_ID>;\n\n  -- Remove archived rows from active table\n  DELETE FROM container\n   WHERE cntr_no = 'CMAU0000020'\n     AND id <> <RETAIN_ID>;\n\n  COMMIT;\n  ```\n  - Replace <RETAIN_ID> with the id identified in ACTION 03.\n- Verification:\n  - Run:\n    [SQL]\n    ```\n    -- Confirm only one active row remains\n    SELECT COUNT(*) as active_count\n      FROM container\n     WHERE cntr_no = 'CMAU0000020';\n    ```\n    Expect active_count = 1.\n  - Confirm archive:\n    [SQL]\n    ```\n    SELECT COUNT(*) as archived_count\n      FROM container_archive\n     WHERE cntr_no = 'CMAU0000020';\n    ```\n    Expect archived_count = (original_duplicates - 1).\n  - Save and attach results to incident evidence.\n\n5) ACTION 05 — Update DB audit/log and add incident note (operational record)\n- Purpose: Maintain traceability for the change.\n- Steps:\n  - Insert an audit row / write to incident log table that documents the action, reason, operator, timestamp, and backup location.\n- Commands:\n  [SQL]\n  ```\n  INSERT INTO incident_audit (incident_id, action, operator, notes, created_at)\n  VALUES ('ALR-861600', 'Archived duplicate container snapshots for CMAU0000020; retained id=<RETAIN_ID>', 'yard-duty-officer', 'Backup: /var/backups/..', NOW());\n  ```\n- Verification:\n  - Query incident_audit to ensure entry exists.\n\n6) ACTION 06 — Trigger downstream cache invalidation / rebuild (KB-2210)\n- Purpose: Ensure API consumers and yard inventory views pick up corrected container state.\n- Steps:\n  - Call cache invalidation and inventory rebuild endpoints (or publish a message to the sync topic).\n  - If your system provides a synchronous rebuild job, trigger it and wait for completion.\n- Commands:\n  [API]\n  ```\n  # Invalidate container cache for CMAU0000020\n  curl -s -X POST https://api.internal/cache/invalidate \\\n    -H \"Authorization: Bearer ${ADMIN_TOKEN}\" \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\"keys\":[\"container:CMAU0000020\",\"yard_inventory\"]}'\n  ```\n  [API]\n  ```\n  # Trigger yard inventory rebuild (example)\n  curl -s -X POST https://api.internal/jobs/rebuild-yard-inventory \\\n    -H \"Authorization: Bearer ${ADMIN_TOKEN}\" \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\"trigger\": \"ALR-861600\", \"containers\":[\"CMAU0000020\"]}'\n  ```\n  - If your system uses messaging (Kafka/Rabbit), publish a container-update event:\n  [API]\n  ```\n  # Publish a container.update event to the sync topic (example)\n  curl -s -X POST https://api.internal/events/publish \\\n    -H \"Authorization: Bearer ${ADMIN_TOKEN}\" \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\"topic\":\"container.update\",\"payload\":{\"cntr_no\":\"CMAU0000020\",\"source\":\"ALR-861600\"}}'\n  ```\n- Verification:\n  - Confirm API responses show success (HTTP 200/202).\n  - Check job status or event queue metrics.\n  - Check application logs for downstream consumers acknowledging updated snapshot.\n\n7) ACTION 07 — Verify downstream consumers and yard inventory views\n- Purpose: Ensure operational systems reflect the corrected single snapshot.\n- Steps & Checks:\n  - Query the container API to confirm single snapshot data.\n  - Query yard inventory view(s) to ensure container appears correctly and counts/locations match DB.\n- Commands:\n  [API]\n  ```\n  # Verify container API\n  curl -s -X GET \"https://api.internal/containers/CMAU0000020\" \\\n    -H \"Authorization: Bearer ${READ_TOKEN}\"\n  ```\n  [API]\n  ```\n  # Verify yard inventory that includes this container (example)\n  curl -s -X GET \"https://api.internal/yard/inventory?cntr_no=CMAU0000020\" \\\n    -H \"Authorization: Bearer ${READ_TOKEN}\"\n  ```\n  [SQL]\n  ```\n  -- Cross-check DB authoritative row\n  SELECT id, cntr_no, status, location, updated_at\n    FROM container\n   WHERE cntr_no = 'CMAU0000020';\n  ```\n- Verification:\n  - API returns a single container resource that matches the authoritative DB row.\n  - Yard inventory API or UI shows the container in the expected location and count.\n  - No new \"DuplicateSnapshotAttempt\" warnings are emitted after rebuild (monitor logs for ~5-10 minutes).\n\n8) ACTION 08 — Monitor for recurrence and document root-cause (post-fix)\n- Purpose: Confirm the fix is stable and identify why duplicate snapshots were emitted.\n- Steps:\n  - Enable elevated monitoring for container snapshot events for 1–2 hours.\n  - Review upstream producers that write container snapshots (timestamp collisions, retries, race conditions).\n  - Assign follow-up to the development team if required.\n- Verification:\n  - No further duplicate attempts for CMAU0000020 appear in logs.\n  - If duplicates are detected elsewhere, open a follow-up ticket referencing ALR-861600 and KB-2210.\n\nReady to close checklist (all items required before closure)\n1. Backup of original rows saved and referenced in incident log. (Yes/No)\n2. Duplicate rows identified and archived; retained_id documented. (Yes/No)\n3. Database verification: only 1 active row remains for CMAU0000020. (Yes/No) — SQL check run.\n4. Cache invalidation and yard inventory rebuild triggered successfully. (Yes/No) — API responses captured.\n5. Downstream APIs and UI reflect corrected container state. (Yes/No)\n6. Logs monitored for recurrence for at least 1 hour with no new duplicates. (Yes/No)\n7. Incident audit record created with operator, time, backup path, and commands used. (Yes/No)\n8. If root-cause not immediately clear, follow-up ticket created and assigned. (Yes/No)\n\nNotes, references and evidence\n- Primary KB: [KB-2210] CNTR-024 — Duplicate Container information received — use steps 1–3 regarding detecting and retaining most recent snapshot.\n- Related KB: [KB-1749] — Data correction and audit best practices.\n- Evidence collected:\n  - container_service.log: WARN container-version DuplicateSnapshotAttempt cntr_no=CMAU0000020...\n  - DB export file: /var/backups/cntr_CMAU0000020_<ts>.csv\n  - SQL results showing pre- and post-change row counts.\n  - API responses from cache invalidation and rebuild jobs.\n\nPost-actions / recommendations\n- Root-cause analysis: check producer retry logic and snapshot deduplication code path. If duplicates result from concurrent producers, recommend introducing dedupe by unique constraint (if applicable) or stronger idempotency token in snapshot payload — coordinate with dev team.\n- If duplicate snapshots occur across more containers, run a detection query and consider a batch archival procedure (follow KB-2210 guidance).\n\nIf you want, I can:\n- Populate the exact SQL with the retain_id after you provide the retained row id.\n- Draft the text block for the incident_audit insert with precise backup path and operator name.\n- Open a follow-up ticket template for engineering to investigate producer behavior.\n\nReady to close? Reply with confirmation for each checklist item or attach the verification outputs and I'll mark ALR-861600 as resolved.",
+      "module": "CNTR",
+      "expectedOutcome": null,
+      "results": {
+        "procedureCompliance": {
+          "score": 70,
+          "issues": [
+            "Missing required step: validate container status",
+            "Missing required step: check location data",
+            "Missing required step: verify ownership"
+          ],
+          "category": "procedure_compliance"
+        },
+        "accuracyCheck": {
+          "score": 85,
+          "issues": [
+            "Missing container status check"
+          ],
+          "category": "accuracy"
+        },
+        "safetyValidation": {
+          "score": 75,
+          "issues": [
+            "Missing safety consideration: proper documentation"
+          ],
+          "category": "safety"
+        },
+        "completenessCheck": {
+          "score": 100,
+          "issues": [],
+          "category": "completeness"
+        },
+        "clarityScore": {
+          "score": 100,
+          "issues": [],
+          "category": "clarity"
+        }
+      },
+      "overallScore": 86,
+      "passed": true
     }
   },
   "summary": {
-    "totalTests": 7,
-    "passedTests": 7,
+    "totalTests": 8,
+    "passedTests": 8,
     "failedTests": 0,
     "avgAccuracy": 87,
-    "lastRun": "2025-10-18T17:23:58.858Z"
+    "lastRun": "2025-10-18T17:25:25.024Z"
   }
 }
