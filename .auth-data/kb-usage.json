@@ -209,6 +209,13 @@
       "context": "escalation_generation",
       "sessionId": "session_1760836882777_d5qg308xh",
       "day": "2025-10-19"
+    },
+    {
+      "timestamp": "2025-10-19T05:08:20.194Z",
+      "articleTitle": "CNTR: Duplicate Container information received",
+      "context": "playbook_generation",
+      "sessionId": "session_1760850500194_mb7gol469",
+      "day": "2025-10-19"
     }
   ],
   "dailyStats": {
@@ -221,9 +228,9 @@
     },
     "2025-10-19": {
       "articles": {
-        "CNTR: Duplicate Container information received": 1
+        "CNTR: Duplicate Container information received": 2
       },
-      "totalAccess": 1,
+      "totalAccess": 2,
       "uniqueArticles": 1
     }
   },

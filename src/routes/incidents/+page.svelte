@@ -130,22 +130,21 @@
 
 			errorObj = null;
 
-			const res = await fetch('/api/gpt5', {
+			const response = await fetch('/api/gpt5', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					incident: selectedIncident,
-					type
+					incidentId: selectedIncident.id,
+					intent: type
 				})
 			});
 
-			if (!res.ok) {
-				const error = await res.json();
-				throw new Error(error?.error || 'GPT-5 request failed');
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data?.error || 'GPT-5 request failed');
 			}
 
-			const data = await res.json();
-			
 			if (type === 'playbook') {
 				playbookOutput = data.output || '';
 			} else {
