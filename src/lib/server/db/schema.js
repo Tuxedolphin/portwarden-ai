@@ -45,7 +45,6 @@ export const incidents = mysqlTable('incidents', {
 		.notNull(),
 	ai_playbook: text('ai_playbook'),
 	ai_escalation: text('ai_escalation'),
-<<<<<<< Updated upstream
 	ai_escalation_likelihood: varchar('ai_escalation_likelihood', { length: 32 }).default('unknown'),
 	ai_contact_category: varchar('ai_contact_category', { length: 64 }),
 	ai_contact_code: varchar('ai_contact_code', { length: 32 }),
@@ -55,10 +54,8 @@ export const incidents = mysqlTable('incidents', {
 	ai_escalation_subject: varchar('ai_escalation_subject', { length: 255 }),
 	ai_escalation_message: text('ai_escalation_message'),
 	ai_escalation_reasoning: text('ai_escalation_reasoning'),
-	ai_description: text('ai_description')
-=======
+	ai_description: text('ai_description'),
 	archivedAt: datetime('archived_at', { mode: 'date' })
->>>>>>> Stashed changes
 });
 
 // Incident tags (many-to-many)
