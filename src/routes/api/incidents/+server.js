@@ -4,7 +4,7 @@ import { requireUser } from '$lib/server/auth';
 import { incidentStatusStore } from '$lib/server/incidentStore.js';
 import { db } from '$lib/server/db';
 import * as tables from '$lib/server/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { count, desc, eq, inArray } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 
 const DEFAULT_STATUS = 'open';
@@ -15,33 +15,113 @@ const PLACEHOLDER_PASSWORD_HASH = '$argon2id$v=19$m=19456,t=2,p=1$placeholder$pl
 
 export async function GET(event) {
 	const url = new URL(event.request.url);
-	const page = Number(url.searchParams.get('page') || '1');
-	const pageSize = Number(url.searchParams.get('pageSize') || '10');
+	const page = Math.max(Number(url.searchParams.get('page') || '1'), 1);
+	const pageSize = Math.min(Math.max(Number(url.searchParams.get('pageSize') || '10'), 1), 50);
 	const offset = (page - 1) * pageSize;
 
-	// Use mock data instead of database
-	const total = incidents.length;
-	const results = incidents.slice(offset, offset + pageSize).map((incident, index) => {
-		// Check if we have a stored status, otherwise use default variety
-		let status = incidentStatusStore.get(incident.id);
-		if (!status) {
-			// Add some variety to status based on incident index for demo purposes
-			if (index % 3 === 1) status = 'in-progress';
-			else if (index % 3 === 2) status = 'resolved';
-			else status = 'open';
+	if (!db) {
+		// Fallback to mock data when the database is not configured
+		const total = incidents.length;
+		const results = incidents.slice(offset, offset + pageSize).map((incident, index) => {
+			let status = incidentStatusStore.get(incident.id);
+			if (!status) {
+				if (index % 3 === 1) status = 'in-progress';
+				else if (index % 3 === 2) status = 'resolved';
+				else status = 'open';
+			}
+
+			return {
+				id: incident.id,
+				title: incident.title,
+				description: incident.summary,
+				status,
+				created_at: incident.occurredAt,
+				updated_at: incident.occurredAt,
+				tags: [],
+				ai_playbook: '',
+				ai_escalation: ''
+			};
+		});
+
+		return json({ total, results });
+	}
+
+	try {
+		const [{ value: totalCountRaw } = { value: 0n }] = await db
+			.select({ value: count() })
+			.from(tables.incidents);
+
+		const total = Number(totalCountRaw ?? 0);
+
+		if (total === 0) {
+			return json({ total: 0, results: [] });
 		}
 
-		return {
-			id: incident.id,
-			title: incident.title,
-			description: incident.summary, // Use summary as description
-			status: status,
-			created_at: incident.occurredAt,
-			tags: [] // Mock empty tags for now
-		};
-	});
+		const incidentRows =
+			/** @type {Array<{ id: number; title: string; caseCode: string; description: string; status: string; createdAt: Date; updatedAt: Date; ai_playbook: string | null; ai_escalation: string | null }>} */ (
+				await db
+					.select({
+						id: tables.incidents.id,
+						title: tables.incidents.title,
+						caseCode: tables.incidents.caseCode,
+						description: tables.incidents.description,
+						status: tables.incidents.status,
+						createdAt: tables.incidents.createdAt,
+						updatedAt: tables.incidents.updatedAt,
+						ai_playbook: tables.incidents.ai_playbook,
+						ai_escalation: tables.incidents.ai_escalation
+					})
+					.from(tables.incidents)
+					.orderBy(desc(tables.incidents.createdAt))
+					.limit(pageSize)
+					.offset(offset)
+			);
 
-	return json({ total, results });
+		const incidentIds = incidentRows.map((row) => row.id);
+		const tagsByIncident = new Map();
+
+		if (incidentIds.length > 0) {
+			const tagRows = /** @type {Array<{ incidentId: number; tagName: string }>} */ (
+				await db
+					.select({
+						incidentId: tables.incidentTags.incidentId,
+						tagName: tables.tags.name
+					})
+					.from(tables.incidentTags)
+					.innerJoin(tables.tags, eq(tables.tags.id, tables.incidentTags.tagId))
+					.where(inArray(tables.incidentTags.incidentId, incidentIds))
+			);
+
+			for (const row of tagRows) {
+				if (!tagsByIncident.has(row.incidentId)) {
+					tagsByIncident.set(row.incidentId, []);
+				}
+				tagsByIncident.get(row.incidentId).push(row.tagName);
+			}
+		}
+
+		const results = incidentRows.map((row) => {
+			const createdAt = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
+			const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
+			return {
+				id: row.id,
+				title: row.title,
+				caseCode: row.caseCode,
+				description: row.description,
+				status: row.status,
+				created_at: createdAt.toISOString(),
+				updated_at: updatedAt.toISOString(),
+				tags: tagsByIncident.get(row.id) ?? [],
+				ai_playbook: row.ai_playbook ?? '',
+				ai_escalation: row.ai_escalation ?? ''
+			};
+		});
+
+		return json({ total, results });
+	} catch (error) {
+		console.error('Failed to load incidents from database:', error);
+		return json({ error: 'Failed to load incidents' }, { status: 500 });
+	}
 }
 
 export async function POST(event) {
@@ -116,7 +196,9 @@ export async function POST(event) {
 			status: DEFAULT_STATUS,
 			created_at: now.toISOString(),
 			updated_at: now.toISOString(),
-			tags
+			tags,
+			ai_playbook: '',
+			ai_escalation: ''
 		};
 
 		scheduleAiGeneration({
