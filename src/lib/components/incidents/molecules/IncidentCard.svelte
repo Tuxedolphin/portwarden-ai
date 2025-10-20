@@ -186,6 +186,41 @@
 	const createdDisplay = $derived(() => formatDateTime(incident?.created_at));
 	const updatedDisplay = $derived(() => formatDateTime(incident?.updated_at));
 	const statusValue = $derived(() => ensureString(incident?.status) || 'open');
+
+	let expanded = $state(false);
+	/** @type {Set<string>} */
+	let checklistCompletion = $state(new Set());
+	const detailButtonLabel = $derived(() => (expanded ? 'Hide details' : 'Show details'));
+	/** @type {number | string | null} */
+	let lastIncidentId = null;
+
+	function toggleExpanded() {
+		expanded = !expanded;
+	}
+
+	/**
+	 * @param {string} key
+	 * @param {boolean} checked
+	 */
+	function setChecklistItem(key, checked) {
+		const next = new Set(checklistCompletion);
+		if (checked) {
+			next.add(key);
+		} else {
+			next.delete(key);
+		}
+		checklistCompletion = next;
+	}
+
+	$effect(() => {
+		const currentId = incident?.id ?? null;
+		if (currentId === lastIncidentId) {
+			return;
+		}
+		lastIncidentId = currentId;
+		checklistCompletion = new Set();
+		expanded = false;
+	});
 </script>
 
 <Card class="incident-card">
@@ -221,135 +256,164 @@
 		<h3 class="incident-title">{incident.title}</h3>
 		<p class="incident-description">{incident.description}</p>
 
-		<div class="meta-grid">
-			<div>
-				<span class="meta-label">Incident ID</span>
-				<span class="meta-value">#{incident.id}</span>
-			</div>
-			<div>
-				<span class="meta-label">Case Code</span>
-				<span class="meta-value">{incident.caseCode || '—'}</span>
-			</div>
+		<div class="summary-actions">
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				class="toggle-details"
+				aria-expanded={expanded}
+				onclick={toggleExpanded}
+			>
+				{detailButtonLabel()}
+			</Button>
 		</div>
 
-		{#if incident.tags && incident.tags.length > 0}
-			<div class="tag-cloud" aria-label="Incident tags">
-				{#each incident.tags as tag}
-					<IncidentTag {tag} />
-				{/each}
-			</div>
-		{/if}
-
-		<section class="ai-section" aria-label="AI generated guidance">
-			{#if showStructuredAi()}
-				<header class="section-header">
-					<h4>Portwarden AI Guidance</h4>
-					<p>Structured recommendations generated automatically from your incident details.</p>
-				</header>
-
-				{#if safetyNotes().length}
-					<div class="playbook-block">
-						<h5>Important Safety Notes</h5>
-						<ul>
-							{#each safetyNotes() as note}
-								<li>{note}</li>
-							{/each}
-						</ul>
+		{#if expanded}
+			<div class="incident-details">
+				<div class="meta-grid">
+					<div>
+						<span class="meta-label">Incident ID</span>
+						<span class="meta-value">#{incident.id}</span>
 					</div>
-				{/if}
+					<div>
+						<span class="meta-label">Case Code</span>
+						<span class="meta-value">{incident.caseCode || '—'}</span>
+					</div>
+				</div>
 
-				{#if actionSteps().length}
-					<div class="playbook-block">
-						<h5>Action Steps</h5>
-						{#each actionSteps() as step, index}
-							<div class="action-step">
-								<div class="step-header">
-									<span class="step-index">{index + 1}</span>
-									<div>
-										<span class="step-title">{step.stepTitle || 'Operational Step'}</span>
-										{#if step.executionContext}
-											<p class="step-context">{step.executionContext}</p>
-										{/if}
-									</div>
-								</div>
-								{#if step.procedure.length}
-									<ol>
-										{#each step.procedure as item}
-											<li>{item}</li>
-										{/each}
-									</ol>
-								{/if}
-							</div>
+				{#if incident.tags && incident.tags.length > 0}
+					<div class="tag-cloud" aria-label="Incident tags">
+						{#each incident.tags as tag}
+							<IncidentTag {tag} />
 						{/each}
 					</div>
 				{/if}
 
-				{#if languageCommands().length}
-					<div class="playbook-block">
-						<h5>Language Commands</h5>
-						<div class="language-grid">
-							{#each languageCommands() as entry}
-								<div class="language-card">
-									<span class="language-label">{entry.language || 'Command'}</span>
-									<p>{entry.command}</p>
+				<section class="ai-section" aria-label="AI generated guidance">
+					{#if showStructuredAi()}
+						<header class="section-header">
+							<h4>Portwarden AI Guidance</h4>
+							<p>Structured recommendations generated automatically from your incident details.</p>
+						</header>
+
+						{#if safetyNotes().length}
+							<div class="playbook-block">
+								<h5>Important Safety Notes</h5>
+								<ul>
+									{#each safetyNotes() as note}
+										<li>{note}</li>
+									{/each}
+								</ul>
+							</div>
+						{/if}
+
+						{#if actionSteps().length}
+							<div class="playbook-block">
+								<h5>Action Steps</h5>
+								{#each actionSteps() as step, index}
+									<div class="action-step">
+										<div class="step-header">
+											<span class="step-index">{index + 1}</span>
+											<div>
+												<span class="step-title">{step.stepTitle || 'Operational Step'}</span>
+												{#if step.executionContext}
+													<p class="step-context">{step.executionContext}</p>
+												{/if}
+											</div>
+										</div>
+										{#if step.procedure.length}
+											<ol>
+												{#each step.procedure as item}
+													<li>{item}</li>
+												{/each}
+											</ol>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						{#if languageCommands().length}
+							<div class="playbook-block">
+								<h5>Language Commands</h5>
+								<div class="language-grid">
+									{#each languageCommands() as entry}
+										<div class="language-card">
+											<span class="language-label">{entry.language || 'Command'}</span>
+											<p>{entry.command}</p>
+										</div>
+									{/each}
 								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
+							</div>
+						{/if}
 
-				{#if checklists().length}
-					<div class="playbook-block">
-						<h5>Checklists</h5>
-						<div class="checklist-grid">
-							{#each checklists() as checklist}
-								<div class="checklist-card">
-									<h6>{checklist.title || 'Checklist'}</h6>
-									<ul>
-										{#each checklist.items as item}
-											<li>{item}</li>
-										{/each}
-									</ul>
+						{#if checklists().length}
+							<div class="playbook-block">
+								<h5>Checklists</h5>
+								<div class="checklist-grid">
+									{#each checklists() as checklist, listIndex}
+										<div class="checklist-card">
+											<h6>{checklist.title || 'Checklist'}</h6>
+											<ul>
+												{#each checklist.items as item, itemIndex}
+													{@const itemKey = `${incident.id ?? 'temp'}-${listIndex}-${itemIndex}`}
+													<li class="checklist-item">
+														<label>
+															<input
+																type="checkbox"
+																class="checklist-checkbox"
+																checked={checklistCompletion.has(itemKey)}
+																onchange={(event) =>
+																	setChecklistItem(itemKey, event.currentTarget.checked)}
+															/>
+															<span>{item}</span>
+														</label>
+													</li>
+												{/each}
+											</ul>
+										</div>
+									{/each}
 								</div>
-							{/each}
+							</div>
+						{/if}
+
+						{#if escalationHasContent()}
+							<div class="playbook-block">
+								<h5>Escalation Summary</h5>
+								<p class="escalation-summary">{escalationSummary()}</p>
+							</div>
+						{/if}
+
+						{#if hasRawFallback() && !playbookHasContent()}
+							<div class="playbook-block raw-json">
+								<h5>AI Playbook (Raw)</h5>
+								<p class="raw-hint">
+									Portwarden AI returned data outside the standard schema. Review the JSON below.
+								</p>
+								<pre>{rawPlaybookJson()}</pre>
+							</div>
+						{/if}
+					{:else if hasRawFallback()}
+						<div class="playbook-block raw-json">
+							<h5>AI Playbook (Raw)</h5>
+							<p class="raw-hint">
+								Portwarden AI responded, but structured guidance is still empty. Inspect the raw
+								output below.
+							</p>
+							<pre>{rawPlaybookJson()}</pre>
 						</div>
-					</div>
-				{/if}
-
-				{#if escalationHasContent()}
-					<div class="playbook-block">
-						<h5>Escalation Summary</h5>
-						<p class="escalation-summary">{escalationSummary()}</p>
-					</div>
-				{/if}
-
-				{#if hasRawFallback() && !playbookHasContent()}
-					<div class="playbook-block raw-json">
-						<h5>AI Playbook (Raw)</h5>
-						<p class="raw-hint">
-							Portwarden AI returned data outside the standard schema. Review the JSON below.
-						</p>
-						<pre>{rawPlaybookJson()}</pre>
-					</div>
-				{/if}
-			{:else if hasRawFallback()}
-				<div class="playbook-block raw-json">
-					<h5>AI Playbook (Raw)</h5>
-					<p class="raw-hint">
-						Portwarden AI responded, but structured guidance is still empty. Inspect the raw output
-						below.
-					</p>
-					<pre>{rawPlaybookJson()}</pre>
-				</div>
-			{:else}
-				<div class="ai-loading" role="status" aria-live="polite">
-					<span class="loading-label">Generating AI guidance</span>
-					<div class="loading-bar">
-						<div class="loading-bar__progress"></div>
-					</div>
-				</div>
-			{/if}
-		</section>
+					{:else}
+						<div class="ai-loading" role="status" aria-live="polite">
+							<span class="loading-label">Generating AI guidance</span>
+							<div class="loading-bar">
+								<div class="loading-bar__progress"></div>
+							</div>
+						</div>
+					{/if}
+				</section>
+			</div>
+		{/if}
 	</CardContent>
 
 	<CardFooter class="incident-footer">
@@ -421,6 +485,23 @@
 		color: #cbd5e1;
 		margin: 0;
 		line-height: 1.6;
+	}
+
+	.summary-actions {
+		display: flex;
+		justify-content: flex-start;
+	}
+
+	:global(.toggle-details) {
+		margin-top: 0.25rem;
+		padding-inline: 0.75rem;
+	}
+
+	.incident-details {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		margin-top: 1rem;
 	}
 
 	.meta-grid {
@@ -573,27 +654,32 @@
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 	}
 
-	.checklist-card {
-		padding: 0.75rem;
-		border-radius: 0.75rem;
-		background: rgba(30, 41, 59, 0.5);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-	}
-
-	.checklist-card h6 {
-		margin: 0 0 0.5rem;
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: #e2e8f0;
-	}
-
 	.checklist-card ul {
-		padding-left: 1.1rem;
-		color: #cbd5e1;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		color: #cbd5f5;
+		line-height: 1.6;
 	}
 
-	.checklist-card li {
-		margin-bottom: 0.35rem;
+	.checklist-item label {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+	}
+
+	.checklist-checkbox {
+		width: 1rem;
+		height: 1rem;
+		margin-top: 0.2rem;
+		accent-color: #3b82f6;
+	}
+
+	.checklist-item span {
+		flex: 1;
 	}
 
 	.escalation-summary {

@@ -112,17 +112,38 @@
 
 	async function createIncident() {
 		toast = '';
+		const trimmedCode = code.trim();
+		const trimmedDescription = description.trim();
+		const tagList = tags
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
+
+		showCreate = false;
+
+		const optimisticIncident = {
+			id: `temp-${Date.now()}`,
+			title: trimmedCode ? `Incident ${trimmedCode}` : 'New Incident',
+			caseCode: trimmedCode,
+			description: trimmedDescription,
+			status: 'open',
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+			tags: tagList,
+			ai_playbook: '',
+			ai_escalation: ''
+		};
+
+		items = [optimisticIncident, ...items];
+		total = (total || 0) + 1;
 		try {
 			const res = await fetch('/api/incidents', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					caseCode: code,
-					description,
-					tags: tags
-						.split(',')
-						.map((t) => t.trim())
-						.filter(Boolean)
+					caseCode: trimmedCode,
+					description: trimmedDescription,
+					tags: tagList
 				})
 			});
 
@@ -130,14 +151,26 @@
 
 			if (!res.ok) throw new Error(data?.error || 'Failed to create incident');
 
-			showCreate = false;
 			code = '';
 			description = '';
 			tags = '';
 
-			await load();
+			const remaining = items.filter(
+				(item) => item.id !== optimisticIncident.id && item.id !== data.id
+			);
+			items = [data, ...remaining];
+
+			if (needsAiRefresh([data])) {
+				aiRefreshAttempts = 0;
+				scheduleAiRefresh();
+			}
+
+			void load();
 		} catch (e) {
+			items = items.filter((item) => item.id !== optimisticIncident.id);
+			total = Math.max(0, total - 1);
 			toast = e instanceof Error ? e.message : 'Create failed';
+			showCreate = true;
 		}
 	}
 
