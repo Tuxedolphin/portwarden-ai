@@ -431,10 +431,18 @@
 		transition: color 0.3s ease;
 	}
 
+	:global(html.light) .incident-id {
+		color: #475569;
+	}
+
 	.archive-date {
 		font-size: 0.8rem;
 		color: var(--maritime-text-muted, #64748b);
 		transition: color 0.3s ease;
+	}
+
+	:global(html.light) .archive-date {
+		color: #64748b;
 	}
 
 	.status-badge {
@@ -480,6 +488,14 @@
 		margin: 0 0 1rem;
 		line-height: 1.6;
 		transition: color 0.3s ease;
+	}
+
+	:global(html.light) .archive-title {
+		color: #0f172a;
+	}
+
+	:global(html.light) .archive-summary {
+		color: #1f2937;
 	}
 
 	.tag-list {
@@ -541,6 +557,16 @@
 		color: var(--maritime-text-secondary, #e2e8f0);
 		font-family: 'JetBrains Mono', monospace;
 		transition: color 0.3s ease;
+	}
+
+	:global(html.light) .timeline-label,
+	:global(html.light) .resolution-label {
+		color: #475569;
+	}
+
+	:global(html.light) .timeline-value,
+	:global(html.light) .resolution-value {
+		color: #1e293b;
 	}
 
 	/* Empty State */
