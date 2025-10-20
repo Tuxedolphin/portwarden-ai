@@ -5,16 +5,16 @@
 	let {
 		items = [],
 		statusOptions = [],
-		onStatusUpdate,
-		onSelectForAI,
-		onArchive,
-		onCreateIncident
+		onStatusUpdate = () => {},
+		onArchive = () => {},
+		onCreateIncident = () => {},
+		onDelete = () => {}
 	} = $props();
 </script>
 
 <div class="incidents-grid">
 	{#each items as incident}
-		<IncidentCard {incident} {statusOptions} {onStatusUpdate} {onSelectForAI} {onArchive} />
+		<IncidentCard {incident} {statusOptions} {onStatusUpdate} {onArchive} {onDelete} />
 	{/each}
 
 	{#if items.length === 0}

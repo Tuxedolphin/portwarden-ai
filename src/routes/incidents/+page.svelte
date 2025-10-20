@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import Header from '$lib/components/Header.svelte';
 	import ErrorViewer from '$lib/ErrorViewer.svelte';
 	import { translateError } from '$lib/errorTranslator';
@@ -37,6 +37,12 @@
 	/** @type {{ title?: string, message?: string, code?: string, steps?: string[], detailsPages?: string[] } | null} */
 	let errorObj = null;
 
+	const AI_REFRESH_DELAY = 5000;
+	const MAX_AI_REFRESH_ATTEMPTS = 6;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let aiRefreshHandle = null;
+	let aiRefreshAttempts = 0;
+
 	// Status options for Select component
 	const statusOptions = [
 		{ value: 'open', label: 'Open' },
@@ -44,11 +50,64 @@
 		{ value: 'resolved', label: 'Resolved' }
 	];
 
+	function cancelAiRefresh() {
+		if (aiRefreshHandle !== null) {
+			clearTimeout(aiRefreshHandle);
+			aiRefreshHandle = null;
+		}
+	}
+
+	/**
+	 * @param {Array<any>} list
+	 */
+	function needsAiRefresh(list) {
+		return list.some((incident) => {
+			const playbook = typeof incident?.ai_playbook === 'string' ? incident.ai_playbook.trim() : '';
+			const escalation =
+				typeof incident?.ai_escalation === 'string' ? incident.ai_escalation.trim() : '';
+			return playbook.length === 0 && escalation.length === 0;
+		});
+	}
+
+	function scheduleAiRefresh() {
+		cancelAiRefresh();
+		if (aiRefreshAttempts >= MAX_AI_REFRESH_ATTEMPTS) {
+			return;
+		}
+		aiRefreshHandle = setTimeout(async () => {
+			aiRefreshHandle = null;
+			aiRefreshAttempts += 1;
+			await load();
+		}, AI_REFRESH_DELAY);
+	}
+
 	async function load() {
 		const res = await fetch(`/api/incidents?page=${page}&pageSize=${pageSize}`);
+		if (!res.ok) {
+			const message = await res.json().catch(() => ({}));
+			toast = message?.error || 'Failed to load incidents';
+			if (aiRefreshHandle === null && aiRefreshAttempts < MAX_AI_REFRESH_ATTEMPTS) {
+				scheduleAiRefresh();
+			}
+			return;
+		}
 		const data = await res.json();
+		toast = '';
 		items = data.results || [];
 		total = data.total || 0;
+		if (needsAiRefresh(items)) {
+			if (aiRefreshHandle === null && aiRefreshAttempts >= MAX_AI_REFRESH_ATTEMPTS) {
+				aiRefreshAttempts = 0;
+			}
+			if (aiRefreshAttempts < MAX_AI_REFRESH_ATTEMPTS) {
+				scheduleAiRefresh();
+			} else {
+				cancelAiRefresh();
+			}
+		} else {
+			aiRefreshAttempts = 0;
+			cancelAiRefresh();
+		}
 	}
 
 	async function createIncident() {
@@ -90,6 +149,28 @@
 			return;
 		}
 		await load();
+	}
+
+	/** @param {number} id */
+	async function deleteIncident(id) {
+		toast = '';
+		try {
+			const res = await fetch(`/api/incidents/${id}`, { method: 'DELETE' });
+			if (!res.ok) {
+				const error = await res.json().catch(() => ({}));
+				throw new Error(error?.error || 'Failed to delete incident');
+			}
+			if (selectedIncident && selectedIncident.id === id) {
+				selectedIncident = null;
+				showAiPanel = false;
+				playbookOutput = '';
+				playbookPayload = null;
+				escalationOutput = '';
+			}
+			await load();
+		} catch (e) {
+			toast = e instanceof Error ? e.message : 'Delete failed';
+		}
 	}
 
 	/** @param {number} id @param {string} newStatus */
@@ -185,6 +266,9 @@
 	}
 
 	onMount(load);
+	onDestroy(() => {
+		cancelAiRefresh();
+	});
 </script>
 
 <Header />
@@ -201,8 +285,8 @@
 		{items}
 		{statusOptions}
 		onStatusUpdate={updateStatus}
-		onSelectForAI={selectIncidentForAI}
 		onArchive={archive}
+		onDelete={deleteIncident}
 		onCreateIncident={() => (showCreate = true)}
 	/>
 

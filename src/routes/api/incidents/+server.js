@@ -52,6 +52,7 @@ export async function GET(event) {
 			.from(tables.incidents);
 
 		const total = Number(totalCountRaw ?? 0);
+		console.log('[Incidents][GET] Counted incidents', { page, pageSize, total });
 
 		if (total === 0) {
 			return json({ total: 0, results: [] });
@@ -116,6 +117,12 @@ export async function GET(event) {
 				ai_escalation: row.ai_escalation ?? ''
 			};
 		});
+
+		const aiStatuses = results.map((item) => ({
+			id: item.id,
+			hasAi: Boolean(item.ai_playbook || item.ai_escalation)
+		}));
+		console.log('[Incidents][GET] Retrieved incidents', { page, pageSize, total, aiStatuses });
 
 		return json({ total, results });
 	} catch (error) {
@@ -186,6 +193,14 @@ export async function POST(event) {
 			await persistIncidentTags(incidentId, tags);
 		}
 
+		console.log('[Incidents][POST] Persisted new incident', {
+			incidentId,
+			title,
+			caseCode,
+			tags,
+			descriptionPreview: description.slice(0, 200)
+		});
+
 		incidentStatusStore.set(String(incidentId), DEFAULT_STATUS);
 
 		const responseIncident = {
@@ -208,6 +223,7 @@ export async function POST(event) {
 			description,
 			tags
 		});
+		console.log('[Incidents][POST] Scheduled AI generation', { incidentId });
 
 		return json(responseIncident, { status: 201 });
 	} catch (error) {
@@ -253,8 +269,20 @@ async function persistIncidentTags(incidentId, tags) {
 	if (tagRecords.length === 0) return;
 
 	const uniqueTagIds = Array.from(new Set(tagRecords.map((tag) => tag.id)));
-	for (const tagId of uniqueTagIds) {
-		await db.insert(tables.incidentTags).values({ incidentId, tagId });
+
+	const existingRelations = /** @type {Array<{ tagId: number }>} */ (
+		await db
+			.select({ tagId: tables.incidentTags.tagId })
+			.from(tables.incidentTags)
+			.where(eq(tables.incidentTags.incidentId, incidentId))
+	);
+	const existingRelationIds = new Set(existingRelations.map((row) => row.tagId));
+	const relationValues = uniqueTagIds
+		.filter((tagId) => !existingRelationIds.has(tagId))
+		.map((tagId) => ({ incidentId, tagId }));
+
+	if (relationValues.length > 0) {
+		await db.insert(tables.incidentTags).values(relationValues);
 	}
 }
 
@@ -410,8 +438,9 @@ async function generateIncidentTitle({ caseCode, description, tags }) {
 			{ role: 'system', content: 'You are Portwarden AI, a maritime duty officer co-pilot.' },
 			{ role: 'user', content: prompt }
 		]);
-		if (response) {
-			return response;
+		if (typeof response === 'string') {
+			const trimmed = response.trim().replace(/^['"]|['"]$/g, '');
+			return trimmed;
 		}
 	} catch (error) {
 		console.error('AI title generation failed:', error);
@@ -458,6 +487,13 @@ async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, descri
 			generateAIEscalation({ title, caseCode, description, tags })
 		]);
 
+		console.log('[Incidents][AI] Generated artifacts', {
+			incidentId,
+			playbookPreview: typeof playbookContent === 'string' ? playbookContent.slice(0, 200) : null,
+			escalationPreview:
+				typeof escalationContent === 'string' ? escalationContent.slice(0, 200) : null
+		});
+
 		await db
 			.update(tables.incidents)
 			.set({
@@ -466,6 +502,12 @@ async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, descri
 				updatedAt: new Date()
 			})
 			.where(eq(tables.incidents.id, incidentId));
+
+		console.log('[Incidents][AI] Stored artifacts', {
+			incidentId,
+			hasPlaybook: Boolean(playbookContent),
+			hasEscalation: Boolean(escalationContent)
+		});
 	} catch (error) {
 		console.error(`Failed to store AI artifacts for incident ${incidentId}:`, error);
 	}
@@ -476,6 +518,11 @@ async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, descri
  */
 async function generateAIPlaybook(incident) {
 	const prompt = buildPlaybookPrompt(incident);
+	console.log('[Incidents][AI] Requesting playbook', {
+		title: incident.title,
+		caseCode: incident.caseCode,
+		tagsCount: incident.tags.length
+	});
 	const playbookResponse = await callChatCompletion(
 		[
 			{ role: 'system', content: 'You are Portwarden AI, a maritime duty officer co-pilot.' },
@@ -530,11 +577,20 @@ async function generateAIPlaybook(incident) {
 		}
 	);
 
-	if (playbookResponse) {
-		return playbookResponse;
+	if (typeof playbookResponse === 'string') {
+		const trimmed = playbookResponse.trim();
+		console.log('[Incidents][AI] Playbook response received', {
+			length: trimmed.length,
+			preview: trimmed.slice(0, 200)
+		});
+		return trimmed;
 	}
 
-	return `AI Playbook for: ${incident.description}`;
+	console.warn('[Incidents][AI] Playbook response missing or invalid', {
+		type: typeof playbookResponse
+	});
+
+	return '';
 }
 
 /**
@@ -542,16 +598,30 @@ async function generateAIPlaybook(incident) {
  */
 async function generateAIEscalation(incident) {
 	const prompt = buildEscalationPrompt(incident);
+	console.log('[Incidents][AI] Requesting escalation', {
+		title: incident.title,
+		caseCode: incident.caseCode,
+		tagsCount: incident.tags.length
+	});
 	const escalationResponse = await callChatCompletion([
 		{ role: 'system', content: 'You are Portwarden AI, a maritime duty officer co-pilot.' },
 		{ role: 'user', content: prompt }
 	]);
 
-	if (escalationResponse) {
-		return escalationResponse;
+	if (typeof escalationResponse === 'string') {
+		const trimmed = escalationResponse.trim();
+		console.log('[Incidents][AI] Escalation response received', {
+			length: trimmed.length,
+			preview: trimmed.slice(0, 200)
+		});
+		return trimmed;
 	}
 
-	return `AI Escalation for: ${incident.description}`;
+	console.warn('[Incidents][AI] Escalation response missing or invalid', {
+		type: typeof escalationResponse
+	});
+
+	return '';
 }
 
 /**
@@ -607,6 +677,7 @@ ${tagsLine}`;
  */
 async function callChatCompletion(messages, responseFormat) {
 	if (!env.AZURE_OPENAI_KEY) {
+		console.warn('[Incidents][AI] Missing Azure OpenAI key, skipping call');
 		return null;
 	}
 
@@ -623,6 +694,14 @@ async function callChatCompletion(messages, responseFormat) {
 		...(responseFormat && { response_format: responseFormat })
 	};
 
+	console.log('[Incidents][AI] Calling Azure OpenAI', {
+		endpoint: normalizedEndpoint,
+		deployment,
+		model,
+		messageCount: messages.length,
+		hasResponseFormat: Boolean(responseFormat)
+	});
+
 	const response = await fetch(requestUrl, {
 		method: 'POST',
 		headers: {
@@ -638,5 +717,9 @@ async function callChatCompletion(messages, responseFormat) {
 	}
 
 	const data = await response.json();
+	console.log('[Incidents][AI] Azure response received', {
+		choices: data?.choices?.length ?? 0,
+		usage: data?.usage ?? null
+	});
 	return data.choices?.[0]?.message?.content ?? null;
 }

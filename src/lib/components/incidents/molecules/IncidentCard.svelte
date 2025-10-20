@@ -2,15 +2,15 @@
 	import { Button, Select, Card, CardHeader, CardContent, CardFooter } from '$lib/components/ui';
 	import IncidentTag from '../atoms/IncidentTag.svelte';
 
-	const STATUS_LABELS = /** @type {Record<string, string>} */ ({
-		open: 'Open',
-		'in-progress': 'In Progress',
-		resolved: 'Resolved'
-	});
-
 	const EMPTY_ARRAY = /** @type {unknown[]} */ ([]);
 
-	let { incident, statusOptions, onStatusUpdate, onSelectForAI, onArchive } = $props();
+	let {
+		incident,
+		statusOptions = [],
+		onStatusUpdate = () => {},
+		onArchive = () => {},
+		onDelete = () => {}
+	} = $props();
 
 	/** @typedef {{ importantSafetyNotes?: unknown; actionSteps?: unknown; languageCommands?: unknown; checklists?: unknown }} PlaybookShape */
 
@@ -79,6 +79,7 @@
 
 	/**
 	 * @param {unknown} playbook
+	 * @returns {string[]}
 	 */
 	function collectSafetyNotes(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
@@ -89,6 +90,7 @@
 
 	/**
 	 * @param {unknown} playbook
+	 * @returns {Array<{ stepTitle: string; executionContext: string; procedure: string[] }>}
 	 */
 	function collectActionSteps(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
@@ -108,6 +110,7 @@
 
 	/**
 	 * @param {unknown} playbook
+	 * @returns {Array<{ language: string; command: string }>}
 	 */
 	function collectLanguageCommands(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
@@ -124,6 +127,7 @@
 
 	/**
 	 * @param {unknown} playbook
+	 * @returns {Array<{ title: string; items: string[] }>}
 	 */
 	function collectChecklists(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
@@ -140,18 +144,48 @@
 			.filter((item) => item.title || item.items.length);
 	}
 
-	const playbookData = $derived(parseJsonSafe(incident?.ai_playbook));
-	const safetyNotes = $derived(collectSafetyNotes(playbookData));
-	const actionSteps = $derived(collectActionSteps(playbookData));
-	const languageCommands = $derived(collectLanguageCommands(playbookData));
-	const checklists = $derived(collectChecklists(playbookData));
-	const escalationSummary = $derived(ensureString(incident?.ai_escalation));
-	const hasAiContent = $derived(Boolean(playbookData || escalationSummary));
-	const createdDisplay = $derived(formatDateTime(incident?.created_at));
-	const updatedDisplay = $derived(formatDateTime(incident?.updated_at));
-	const statusLabel = $derived(
-		(STATUS_LABELS[ensureString(incident?.status)] ?? ensureString(incident?.status)) || 'Unknown'
-	);
+	/**
+	 * @param {unknown} playbook
+	 * @returns {string}
+	 */
+	function serialisePlaybook(playbook) {
+		if (!playbook) return '';
+		if (typeof playbook === 'string') {
+			return playbook.trim();
+		}
+		try {
+			return JSON.stringify(playbook, null, 2);
+		} catch (error) {
+			console.warn('Failed to serialise playbook:', error);
+			return '';
+		}
+	}
+
+	const aiPlaybookRaw = $derived(() => serialisePlaybook(incident?.ai_playbook));
+	const playbookData = $derived(() => parseJsonSafe(aiPlaybookRaw()));
+	const safetyNotes = $derived(() => collectSafetyNotes(playbookData()));
+	const actionSteps = $derived(() => collectActionSteps(playbookData()));
+	const languageCommands = $derived(() => collectLanguageCommands(playbookData()));
+	const checklists = $derived(() => collectChecklists(playbookData()));
+	const escalationSummary = $derived(() => ensureString(incident?.ai_escalation));
+	const playbookHasContent = $derived(() => {
+		const notes = safetyNotes();
+		const steps = actionSteps();
+		const commands = languageCommands();
+		const lists = checklists();
+		return notes.length > 0 || steps.length > 0 || commands.length > 0 || lists.length > 0;
+	});
+	const escalationHasContent = $derived(() => escalationSummary().length > 0);
+	const rawPlaybookJson = $derived(() => {
+		if (playbookHasContent()) return '';
+		const raw = aiPlaybookRaw();
+		return raw.length > 0 ? raw : '';
+	});
+	const hasRawFallback = $derived(() => rawPlaybookJson().length > 0);
+	const showStructuredAi = $derived(() => playbookHasContent() || escalationHasContent());
+	const createdDisplay = $derived(() => formatDateTime(incident?.created_at));
+	const updatedDisplay = $derived(() => formatDateTime(incident?.updated_at));
+	const statusValue = $derived(() => ensureString(incident?.status) || 'open');
 </script>
 
 <Card class="incident-card">
@@ -161,23 +195,23 @@
 				{incident.caseCode || `#${incident.id}`}
 			</div>
 			<div class="incident-timestamps">
-				<span>Created {createdDisplay}</span>
-				{#if updatedDisplay && updatedDisplay !== createdDisplay}
-					<span>Updated {updatedDisplay}</span>
+				<span>Created {createdDisplay()}</span>
+				{#if updatedDisplay() && updatedDisplay() !== createdDisplay()}
+					<span>Updated {updatedDisplay()}</span>
 				{/if}
 			</div>
 		</div>
 		<div class="header-controls">
-			<span class={`status-pill status-${incident.status}`}>{statusLabel}</span>
 			<div class="status-dropdown">
 				<Select
 					variant="status"
 					size="sm"
-					value={incident.status}
-					statusValue={incident.status}
+					value={statusValue()}
+					statusValue={statusValue()}
 					options={statusOptions}
 					onchange={(/** @type {CustomEvent} */ e) => onStatusUpdate(incident.id, e.detail)}
 					class="status-select"
+					aria-label="Update incident status"
 				/>
 			</div>
 		</div>
@@ -207,27 +241,27 @@
 		{/if}
 
 		<section class="ai-section" aria-label="AI generated guidance">
-			{#if hasAiContent}
+			{#if showStructuredAi()}
 				<header class="section-header">
 					<h4>Portwarden AI Guidance</h4>
 					<p>Structured recommendations generated automatically from your incident details.</p>
 				</header>
 
-				{#if safetyNotes.length}
+				{#if safetyNotes().length}
 					<div class="playbook-block">
 						<h5>Important Safety Notes</h5>
 						<ul>
-							{#each safetyNotes as note}
+							{#each safetyNotes() as note}
 								<li>{note}</li>
 							{/each}
 						</ul>
 					</div>
 				{/if}
 
-				{#if actionSteps.length}
+				{#if actionSteps().length}
 					<div class="playbook-block">
 						<h5>Action Steps</h5>
-						{#each actionSteps as step, index}
+						{#each actionSteps() as step, index}
 							<div class="action-step">
 								<div class="step-header">
 									<span class="step-index">{index + 1}</span>
@@ -250,11 +284,11 @@
 					</div>
 				{/if}
 
-				{#if languageCommands.length}
+				{#if languageCommands().length}
 					<div class="playbook-block">
 						<h5>Language Commands</h5>
 						<div class="language-grid">
-							{#each languageCommands as entry}
+							{#each languageCommands() as entry}
 								<div class="language-card">
 									<span class="language-label">{entry.language || 'Command'}</span>
 									<p>{entry.command}</p>
@@ -264,11 +298,11 @@
 					</div>
 				{/if}
 
-				{#if checklists.length}
+				{#if checklists().length}
 					<div class="playbook-block">
 						<h5>Checklists</h5>
 						<div class="checklist-grid">
-							{#each checklists as checklist}
+							{#each checklists() as checklist}
 								<div class="checklist-card">
 									<h6>{checklist.title || 'Checklist'}</h6>
 									<ul>
@@ -282,44 +316,58 @@
 					</div>
 				{/if}
 
-				{#if escalationSummary}
+				{#if escalationHasContent()}
 					<div class="playbook-block">
 						<h5>Escalation Summary</h5>
-						<p class="escalation-summary">{escalationSummary}</p>
+						<p class="escalation-summary">{escalationSummary()}</p>
 					</div>
 				{/if}
-			{:else}
-				<div class="ai-placeholder">
-					<span class="placeholder-title">AI insights are on the way</span>
-					<p>
-						Portwarden AI is generating operational guidance for this incident. Refresh in a few
-						moments to see the structured playbook and escalation summary.
+
+				{#if hasRawFallback() && !playbookHasContent()}
+					<div class="playbook-block raw-json">
+						<h5>AI Playbook (Raw)</h5>
+						<p class="raw-hint">
+							Portwarden AI returned data outside the standard schema. Review the JSON below.
+						</p>
+						<pre>{rawPlaybookJson()}</pre>
+					</div>
+				{/if}
+			{:else if hasRawFallback()}
+				<div class="playbook-block raw-json">
+					<h5>AI Playbook (Raw)</h5>
+					<p class="raw-hint">
+						Portwarden AI responded, but structured guidance is still empty. Inspect the raw output
+						below.
 					</p>
+					<pre>{rawPlaybookJson()}</pre>
+				</div>
+			{:else}
+				<div class="ai-loading" role="status" aria-live="polite">
+					<span class="loading-label">Generating AI guidance</span>
+					<div class="loading-bar">
+						<div class="loading-bar__progress"></div>
+					</div>
 				</div>
 			{/if}
 		</section>
 	</CardContent>
 
 	<CardFooter class="incident-footer">
-		<div class="incident-meta">
-			<span class="meta-label">Status</span>
-			<span class="meta-value">{statusLabel}</span>
-		</div>
 		<div class="incident-actions">
-			<Button variant="secondary" size="sm" onclick={() => onSelectForAI(incident)}>Ask AI</Button>
 			<Button variant="outline" size="sm" onclick={() => onArchive(incident.id)}>Archive</Button>
+			<Button variant="destructive" size="sm" onclick={() => onDelete(incident.id)}>Delete</Button>
 		</div>
 	</CardFooter>
 </Card>
 
 <style>
-	.incident-card {
+	:global(.incident-card) {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 	}
 
-	.incident-header {
+	:global(.incident-header) {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
@@ -356,34 +404,7 @@
 		gap: 0.75rem;
 	}
 
-	.status-pill {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.35rem 0.8rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-	}
-
-	.status-open {
-		background: rgba(59, 130, 246, 0.2);
-		color: #93c5fd;
-	}
-
-	.status-in-progress {
-		background: rgba(250, 204, 21, 0.2);
-		color: #facc15;
-	}
-
-	.status-resolved {
-		background: rgba(34, 197, 94, 0.2);
-		color: #86efac;
-	}
-
-	.incident-body {
+	:global(.incident-body) {
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
@@ -581,46 +602,90 @@
 		line-height: 1.6;
 	}
 
-	.ai-placeholder {
+	.ai-loading {
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
+		gap: 0.75rem;
 		padding: 1rem;
 		border-radius: 0.85rem;
-		background: rgba(30, 41, 59, 0.45);
-		border: 1px dashed rgba(148, 163, 184, 0.35);
+		background: rgba(15, 23, 42, 0.55);
+		border: 1px solid rgba(30, 64, 175, 0.3);
+	}
+
+	.loading-label {
 		color: #94a3b8;
 		font-size: 0.95rem;
 	}
 
-	.placeholder-title {
-		font-weight: 600;
-		color: #bfdbfe;
+	.loading-bar {
+		position: relative;
+		overflow: hidden;
+		height: 0.5rem;
+		border-radius: 999px;
+		background: rgba(148, 163, 184, 0.25);
 	}
 
-	.incident-footer {
+	.loading-bar__progress {
+		position: absolute;
+		inset: 0;
+		transform: translateX(-100%);
+		background: linear-gradient(
+			90deg,
+			rgba(59, 130, 246, 0.2),
+			rgba(59, 130, 246, 0.8),
+			rgba(59, 130, 246, 0.2)
+		);
+		animation: loading-slide 2s infinite;
+	}
+
+	@keyframes loading-slide {
+		0% {
+			transform: translateX(-100%);
+		}
+		50% {
+			transform: translateX(0%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	.raw-json pre {
+		margin: 0;
+		padding: 0.75rem;
+		border-radius: 0.75rem;
+		background: rgba(10, 16, 32, 0.75);
+		border: 1px solid rgba(59, 130, 246, 0.2);
+		color: #e2e8f0;
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.85rem;
+		overflow-x: auto;
+	}
+
+	.raw-hint {
+		margin: 0;
+		color: #94a3b8;
+		font-size: 0.9rem;
+	}
+
+	:global(.incident-footer) {
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-end;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 1rem;
+		gap: 0.75rem;
 		border-top: 1px solid rgba(148, 163, 184, 0.2);
 		padding-top: 1rem;
 	}
 
-	.incident-meta {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
 	.incident-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.75rem;
 	}
 
 	@media (max-width: 768px) {
-		.incident-header {
+		:global(.incident-header) {
 			flex-direction: column;
 			align-items: flex-start;
 		}
