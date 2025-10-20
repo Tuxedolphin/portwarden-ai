@@ -1,5 +1,13 @@
 <script>
-	import { Button, Select, Card, CardHeader, CardContent, CardFooter } from '$lib/components/ui';
+	import {
+		Button,
+		Checkbox,
+		Select,
+		Card,
+		CardHeader,
+		CardContent,
+		CardFooter
+	} from '$lib/components/ui';
 	import IncidentTag from '../atoms/IncidentTag.svelte';
 
 	const EMPTY_ARRAY = /** @type {unknown[]} */ ([]);
@@ -19,12 +27,12 @@
 	 * @returns {Record<string, unknown>}
 	 */
 	function toRecord(value) {
-		return value && typeof value === 'object' ? /** @type {Record<string, unknown>} */ (value) : {};
+		if (value && typeof value === 'object' && !Array.isArray(value)) {
+			return /** @type {Record<string, unknown>} */ (value);
+		}
+		return {};
 	}
 
-	/**
-	 * @param {unknown} value
-	 */
 	function parseJsonSafe(value) {
 		if (typeof value !== 'string' || value.trim().length === 0) return null;
 		try {
@@ -129,10 +137,6 @@
 			.filter(Boolean);
 	}
 
-	/**
-	 * @param {unknown} playbook
-	 * @returns {Array<{ title: string; items: string[]; relatedStep: string }>}
-	 */
 	function collectChecklists(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
 		return ensureArray(source.checklists)
@@ -339,28 +343,30 @@
 			</div>
 		</div>
 
-		<div class="summary-actions">
-			<Button
-				type="button"
-				variant="ghost"
-				size="sm"
-				class="toggle-details"
-				aria-expanded={expanded}
-				onclick={toggleExpanded}
-			>
-				{detailButtonLabel()}
-			</Button>
-			<Button
-				type="button"
-				variant="ghost"
-				size="sm"
-				class="toggle-escalation"
-				aria-expanded={showEscalation}
-				onclick={toggleEscalation}
-			>
-				{escalateButtonLabel()}
-			</Button>
-		</div>
+		{#if !aiPending()}
+			<div class="summary-actions">
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					class="toggle-details"
+					aria-expanded={expanded}
+					onclick={toggleExpanded}
+				>
+					{detailButtonLabel()}
+				</Button>
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					class="toggle-escalation"
+					aria-expanded={showEscalation}
+					onclick={toggleEscalation}
+				>
+					{escalateButtonLabel()}
+				</Button>
+			</div>
+		{/if}
 
 		{#if aiPending()}
 			<div class="ai-loading" role="status" aria-live="polite">
@@ -432,11 +438,11 @@
 															class:completed={completedItems.has(itemKey)}
 														>
 															<label>
-																<input
-																	type="checkbox"
+																<Checkbox
 																	checked={completedItems.has(itemKey)}
-																	onchange={(event) =>
-																		setCompletion(itemKey, event.currentTarget.checked)}
+																	on:change={(event) =>
+																		setCompletion(itemKey, event.detail.checked)}
+																	aria-label={`Mark ${item} complete`}
 																/>
 																<span class="item-text">{item}</span>
 															</label>
@@ -462,11 +468,11 @@
 																		class:completed={completedItems.has(itemKey)}
 																	>
 																		<label>
-																			<input
-																				type="checkbox"
+																			<Checkbox
 																				checked={completedItems.has(itemKey)}
-																				onchange={(event) =>
-																					setCompletion(itemKey, event.currentTarget.checked)}
+																				on:change={(event) =>
+																					setCompletion(itemKey, event.detail.checked)}
+																				aria-label={`Mark ${item} complete`}
 																			/>
 																			<span class="item-text">{item}</span>
 																		</label>
@@ -490,11 +496,10 @@
 											{@const itemKey = makeCompletionKey('verify', incident.id ?? 'temp', index)}
 											<li class="completion-item" class:completed={completedItems.has(itemKey)}>
 												<label>
-													<input
-														type="checkbox"
+													<Checkbox
 														checked={completedItems.has(itemKey)}
-														onchange={(event) =>
-															setCompletion(itemKey, event.currentTarget.checked)}
+														on:change={(event) => setCompletion(itemKey, event.detail.checked)}
+														aria-label={`Mark ${step} verified`}
 													/>
 													<span class="item-text">{step}</span>
 												</label>
@@ -524,11 +529,11 @@
 															class:completed={completedItems.has(itemKey)}
 														>
 															<label>
-																<input
-																	type="checkbox"
+																<Checkbox
 																	checked={completedItems.has(itemKey)}
-																	onchange={(event) =>
-																		setCompletion(itemKey, event.currentTarget.checked)}
+																	on:change={(event) =>
+																		setCompletion(itemKey, event.detail.checked)}
+																	aria-label={`Mark ${item} complete`}
 																/>
 																<span class="item-text">{item}</span>
 															</label>
@@ -698,8 +703,16 @@
 
 	.summary-actions {
 		display: flex;
+		gap: 0.75rem;
+		align-items: center;
 		justify-content: flex-start;
-		margin-top: 0.25rem;
+		margin-top: 0.5rem;
+	}
+
+	.summary-actions :global([data-slot='button']) {
+		padding-inline: 0.75rem;
+		min-width: 7rem;
+		justify-content: center;
 	}
 
 	.ai-loading {
@@ -943,11 +956,10 @@
 		padding: 0.55rem 0.75rem;
 	}
 
-	.completion-item input[type='checkbox'] {
-		width: 1rem;
-		height: 1rem;
-		margin-top: 0;
-		accent-color: #3b82f6;
+	.completion-item :global(.checkbox-root) {
+		flex-shrink: 0;
+		height: 1.1rem;
+		width: 1.1rem;
 	}
 
 	.completion-item .item-text {
