@@ -1,46 +1,49 @@
-import { mysqlTable, bigint, varchar, text, datetime, mysqlEnum } from 'drizzle-orm/mysql-core';
+import { pgTable, serial, varchar, text, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+// Define enums
+export const statusEnum = pgEnum('status', ['open', 'in-progress', 'resolved']);
+
 // Users
-export const users = mysqlTable('users', {
-	id: bigint('id', { mode: 'number', unsigned: true }).primaryKey().autoincrement(),
+export const users = pgTable('users', {
+	id: serial('id').primaryKey(),
 	email: varchar('email', { length: 255 }).notNull().unique(),
 	name: varchar('name', { length: 255 }).notNull(),
 	passwordHash: varchar('password_hash', { length: 255 }).notNull(),
-	createdAt: datetime('created_at', { mode: 'date' })
+	createdAt: timestamp('created_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
 		.notNull()
 });
 
 // Lucia sessions
-export const sessions = mysqlTable('session', {
+export const sessions = pgTable('session', {
 	id: varchar('id', { length: 255 }).primaryKey(),
-	userId: bigint('user_id', { mode: 'number', unsigned: true })
+	userId: serial('user_id')
 		.notNull()
 		.references(() => users.id),
-	expiresAt: datetime('expires_at', { mode: 'date' }).notNull()
+	expiresAt: timestamp('expires_at', { mode: 'date' }).notNull()
 });
 
 // Tags
-export const tags = mysqlTable('tags', {
-	id: bigint('id', { mode: 'number', unsigned: true }).primaryKey().autoincrement(),
+export const tags = pgTable('tags', {
+	id: serial('id').primaryKey(),
 	name: varchar('name', { length: 64 }).notNull().unique()
 });
 
 // Incidents
-export const incidents = mysqlTable('incidents', {
-	id: bigint('id', { mode: 'number', unsigned: true }).primaryKey().autoincrement(),
+export const incidents = pgTable('incidents', {
+	id: serial('id').primaryKey(),
 	title: varchar('title', { length: 255 }).notNull(),
 	caseCode: varchar('case_code', { length: 64 }).notNull(),
 	description: text('description').notNull(),
-	status: mysqlEnum('status', ['open', 'in-progress', 'resolved']).notNull().default('open'),
-	createdBy: bigint('created_by', { mode: 'number', unsigned: true })
+	status: statusEnum('status').notNull().default('open'),
+	createdBy: serial('created_by')
 		.notNull()
 		.references(() => users.id),
-	createdAt: datetime('created_at', { mode: 'date' })
+	createdAt: timestamp('created_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
 		.notNull(),
-	updatedAt: datetime('updated_at', { mode: 'date' })
+	updatedAt: timestamp('updated_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
 		.notNull(),
 	ai_playbook: text('ai_playbook'),
@@ -58,22 +61,22 @@ export const incidents = mysqlTable('incidents', {
 });
 
 // Incident tags (many-to-many)
-export const incidentTags = mysqlTable('incident_tags', {
-	incidentId: bigint('incident_id', { mode: 'number', unsigned: true })
+export const incidentTags = pgTable('incident_tags', {
+	incidentId: serial('incident_id')
 		.notNull()
 		.references(() => incidents.id),
-	tagId: bigint('tag_id', { mode: 'number', unsigned: true })
+	tagId: serial('tag_id')
 		.notNull()
 		.references(() => tags.id)
 });
 
 // Archived issues
-export const archivedIssues = mysqlTable('archived_issues', {
-	id: bigint('id', { mode: 'number', unsigned: true }).primaryKey().autoincrement(),
-	incidentId: bigint('incident_id', { mode: 'number', unsigned: true }),
+export const archivedIssues = pgTable('archived_issues', {
+	id: serial('id').primaryKey(),
+	incidentId: serial('incident_id'),
 	title: varchar('title', { length: 255 }).notNull(),
 	summary: text('summary').notNull(),
-	archivedAt: datetime('archived_at', { mode: 'date' })
+	archivedAt: timestamp('archived_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
 		.notNull()
 });

@@ -1,26 +1,32 @@
-import { drizzle } from 'drizzle-orm/mysql2';
-import mysql from 'mysql2/promise';
-import * as schema from './schema';
 import { env } from '$env/dynamic/private';
+import { createClient } from '@supabase/supabase-js';
 
 // Make database optional for deployment environments where it's not configured
-/** @type {any} */
-let db = null;
+/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
+let supabase = null;
 
-if (env.DATABASE_URL) {
+if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
 	try {
-		const client = mysql.createPool(env.DATABASE_URL);
-		db = drizzle(client, { schema, mode: 'default' });
-		console.log('Database connection established');
+		supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+			auth: { persistSession: false },
+			global: {
+				headers: {
+					'X-Client-Info': 'portwarden-ai-server'
+				}
+			}
+		});
+		console.log('Supabase client initialised');
 	} catch (error) {
 		console.warn(
-			'Database connection failed:',
+			'Supabase client initialisation failed:',
 			error instanceof Error ? error.message : String(error)
 		);
-		db = null;
+		supabase = null;
 	}
 } else {
-	console.warn('DATABASE_URL is not set - database functionality will be unavailable');
+	console.warn(
+		'SUPABASE_URL or SUPABASE_ANON_KEY is not set - database functionality will be unavailable'
+	);
 }
 
-export { db };
+export { supabase };

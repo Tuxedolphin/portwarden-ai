@@ -1,10 +1,7 @@
 import { hash, verify } from '@node-rs/argon2';
-import { encodeBase32LowerCase } from '@oslojs/encoding';
 import { fail, redirect } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import * as auth from '$lib/server/auth';
-import { db } from '$lib/server/db';
-import * as table from '$lib/server/db/schema';
+import { supabase } from '$lib/server/db';
 
 export const load = async (event) => {
 	if (event.locals.user) {
@@ -16,7 +13,7 @@ export const load = async (event) => {
 export const actions = {
 	login: async (event) => {
 		// Check if database is available
-		if (!db) {
+		if (!supabase) {
 			return fail(503, {
 				message: 'Database not available - this is a demo feature that requires database setup.'
 			});
@@ -35,14 +32,22 @@ export const actions = {
 			return fail(400, { message: 'Invalid password (min 6, max 255 characters)' });
 		}
 
-		const results = await db.select().from(table.users).where(eq(table.users.email, username));
+		const { data: results, error: selectError } = await supabase
+			.from('users')
+			.select('id, email, password_hash')
+			.eq('email', username);
 
-		const existingUser = results.at(0);
+		if (selectError) {
+			console.error('Failed to query users table:', selectError);
+			return fail(500, { message: 'An error has occurred' });
+		}
+
+		const existingUser = results?.at(0) ?? null;
 		if (!existingUser) {
 			return fail(400, { message: 'Incorrect username or password' });
 		}
 
-		const validPassword = await verify(existingUser.passwordHash, String(password), {
+		const validPassword = await verify(existingUser.password_hash, String(password), {
 			memoryCost: 19456,
 			timeCost: 2,
 			outputLen: 32,
@@ -59,7 +64,7 @@ export const actions = {
 	},
 	register: async (event) => {
 		// Check if database is available
-		if (!db) {
+		if (!supabase) {
 			return fail(503, {
 				message: 'Database not available - this is a demo feature that requires database setup.'
 			});
@@ -85,27 +90,36 @@ export const actions = {
 		});
 
 		try {
-			await db.insert(table.users).values({ email: String(username), name: 'Demo', passwordHash });
+			const { error: insertError } = await supabase
+				.from('users')
+				.insert({ email: String(username), name: 'Demo', password_hash: passwordHash });
+			if (insertError && !isDuplicateKeyError(insertError)) {
+				throw insertError;
+			}
 
-			const [created] = await db
-				.select()
-				.from(table.users)
-				.where(eq(table.users.email, String(username)));
+			const {
+				data: created,
+				error: fetchError,
+				status: fetchStatus
+			} = await supabase.from('users').select('id').eq('email', String(username)).maybeSingle();
+
+			if (fetchError && fetchStatus !== 406) {
+				throw fetchError;
+			}
+
+			if (!created?.id) {
+				throw new Error('Failed to create user');
+			}
+
 			const session = await auth.createSession(created.id);
 			auth.setSessionCookie(event, session);
-		} catch {
+		} catch (err) {
+			console.error('User registration failed:', err);
 			return fail(500, { message: 'An error has occurred' });
 		}
 		return redirect(302, '/demo/lucia');
 	}
 };
-
-function generateUserId() {
-	// ID with 120 bits of entropy, or about the same as UUID v4.
-	const bytes = crypto.getRandomValues(new Uint8Array(15));
-	const id = encodeBase32LowerCase(bytes);
-	return id;
-}
 
 /** @param {string} username */
 function validateUsername(username) {
@@ -120,4 +134,11 @@ function validateUsername(username) {
 /** @param {string} password */
 function validatePassword(password) {
 	return typeof password === 'string' && password.length >= 6 && password.length <= 255;
+}
+
+/**
+ * @param {unknown} error
+ */
+function isDuplicateKeyError(error) {
+	return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505');
 }

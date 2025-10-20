@@ -2,9 +2,7 @@ import { json } from '@sveltejs/kit';
 import { incidents } from '$lib/data/incidents.js';
 import { requireUser } from '$lib/server/auth';
 import { incidentStatusStore } from '$lib/server/incidentStore.js';
-import { db } from '$lib/server/db';
-import * as tables from '$lib/server/db/schema';
-import { count, desc, eq, inArray } from 'drizzle-orm';
+import { supabase } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 
 const DEFAULT_STATUS = 'open';
@@ -26,14 +24,64 @@ const ESCALATION_RESPONSE_SCHEMA = {
 	}
 };
 
+/**
+ * @param {{ incident_tags?: Array<Record<string, any>>; [key: string]: any }} row
+ * @returns {{ id: number; title: string; caseCode: string; description: string; status: string; created_at: string; updated_at: string; tags: string[]; ai_playbook: string; ai_escalation: string; ai_escalation_likelihood: string; ai_contact_category: string; ai_contact_code: string; ai_contact_name: string; ai_contact_email: string; ai_contact_role: string; ai_escalation_subject: string; ai_escalation_message: string; ai_escalation_reasoning: string; ai_description: string }}
+ */
+function mapIncidentRowFromSupabase(row) {
+	const tags = Array.isArray(row?.incident_tags)
+		? row.incident_tags
+				.map(
+					/** @type {(relation: Record<string, any>) => string | null} */ (relation) => {
+						if (relation && typeof relation === 'object' && 'tags' in relation) {
+							const nested = relation.tags;
+							if (nested && typeof nested === 'object' && 'name' in nested) {
+								return String(nested.name);
+							}
+						}
+						return null;
+					}
+				)
+				.filter(
+					/** @type {(value: string | null) => value is string} */ (value) =>
+						typeof value === 'string'
+				)
+		: [];
+
+	const createdAt = row?.created_at ? new Date(row.created_at) : new Date();
+	const updatedAt = row?.updated_at ? new Date(row.updated_at) : createdAt;
+
+	return {
+		id: row?.id ?? 0,
+		title: row?.title ?? '',
+		caseCode: row?.case_code ?? '',
+		description: row?.description ?? '',
+		status: row?.status ?? 'open',
+		created_at: createdAt.toISOString(),
+		updated_at: updatedAt.toISOString(),
+		tags,
+		ai_playbook: row?.ai_playbook ?? '',
+		ai_escalation: row?.ai_escalation ?? '',
+		ai_escalation_likelihood: row?.ai_escalation_likelihood ?? 'unknown',
+		ai_contact_category: row?.ai_contact_category ?? '',
+		ai_contact_code: row?.ai_contact_code ?? '',
+		ai_contact_name: row?.ai_contact_name ?? '',
+		ai_contact_email: row?.ai_contact_email ?? '',
+		ai_contact_role: row?.ai_contact_role ?? '',
+		ai_escalation_subject: row?.ai_escalation_subject ?? '',
+		ai_escalation_message: row?.ai_escalation_message ?? '',
+		ai_escalation_reasoning: row?.ai_escalation_reasoning ?? '',
+		ai_description: row?.ai_description ?? ''
+	};
+}
+
 export async function GET(event) {
 	const url = new URL(event.request.url);
 	const page = Math.max(Number(url.searchParams.get('page') || '1'), 1);
 	const pageSize = Math.min(Math.max(Number(url.searchParams.get('pageSize') || '10'), 1), 50);
 	const offset = (page - 1) * pageSize;
 
-	if (!db) {
-		// Fallback to mock data when the database is not configured
+	if (!supabase) {
 		const total = incidents.length;
 		const results = incidents.slice(offset, offset + pageSize).map((incident, index) => {
 			let status = incidentStatusStore.get(incident.id);
@@ -70,106 +118,72 @@ export async function GET(event) {
 	}
 
 	try {
-		const [{ value: totalCountRaw } = { value: 0n }] = await db
-			.select({ value: count() })
-			.from(tables.incidents);
+		const { count: total, error: countError } = await supabase
+			.from('incidents')
+			.select('*', { count: 'exact', head: true });
 
-		const total = Number(totalCountRaw ?? 0);
-		console.log('[Incidents][GET] Counted incidents', { page, pageSize, total });
+		if (countError) {
+			throw countError;
+		}
 
-		if (total === 0) {
+		const totalCount = total ?? 0;
+		console.log('[Incidents][GET] Counted incidents', { page, pageSize, total: totalCount });
+
+		if (totalCount === 0) {
 			return json({ total: 0, results: [] });
 		}
 
-		const incidentRows =
-			/** @type {Array<{ id: number; title: string; caseCode: string; description: string; status: string; createdAt: Date; updatedAt: Date; ai_playbook: string | null; ai_escalation: string | null; ai_escalation_likelihood: string | null; ai_contact_category: string | null; ai_contact_code: string | null; ai_contact_name: string | null; ai_contact_email: string | null; ai_contact_role: string | null; ai_escalation_subject: string | null; ai_escalation_message: string | null; ai_escalation_reasoning: string | null; ai_description: string | null }>} */ (
-				await db
-					.select({
-						id: tables.incidents.id,
-						title: tables.incidents.title,
-						caseCode: tables.incidents.caseCode,
-						description: tables.incidents.description,
-						status: tables.incidents.status,
-						createdAt: tables.incidents.createdAt,
-						updatedAt: tables.incidents.updatedAt,
-						ai_playbook: tables.incidents.ai_playbook,
-						ai_escalation: tables.incidents.ai_escalation,
-						ai_escalation_likelihood: tables.incidents.ai_escalation_likelihood,
-						ai_contact_category: tables.incidents.ai_contact_category,
-						ai_contact_code: tables.incidents.ai_contact_code,
-						ai_contact_name: tables.incidents.ai_contact_name,
-						ai_contact_email: tables.incidents.ai_contact_email,
-						ai_contact_role: tables.incidents.ai_contact_role,
-						ai_escalation_subject: tables.incidents.ai_escalation_subject,
-						ai_escalation_message: tables.incidents.ai_escalation_message,
-						ai_escalation_reasoning: tables.incidents.ai_escalation_reasoning,
-						ai_description: tables.incidents.ai_description
-					})
-					.from(tables.incidents)
-					.orderBy(desc(tables.incidents.createdAt))
-					.limit(pageSize)
-					.offset(offset)
-			);
+		const { data, error } = await supabase
+			.from('incidents')
+			.select(
+				`id,
+				title,
+				case_code,
+				description,
+				status,
+				created_at,
+				updated_at,
+				ai_playbook,
+				ai_escalation,
+				ai_escalation_likelihood,
+				ai_contact_category,
+				ai_contact_code,
+				ai_contact_name,
+				ai_contact_email,
+				ai_contact_role,
+				ai_escalation_subject,
+				ai_escalation_message,
+				ai_escalation_reasoning,
+				ai_description,
+				incident_tags ( tag_id, tags ( name ) )`
+			)
+			.order('created_at', { ascending: false })
+			.range(offset, offset + pageSize - 1);
 
-		const incidentIds = incidentRows.map((row) => row.id);
-		const tagsByIncident = new Map();
-
-		if (incidentIds.length > 0) {
-			const tagRows = /** @type {Array<{ incidentId: number; tagName: string }>} */ (
-				await db
-					.select({
-						incidentId: tables.incidentTags.incidentId,
-						tagName: tables.tags.name
-					})
-					.from(tables.incidentTags)
-					.innerJoin(tables.tags, eq(tables.tags.id, tables.incidentTags.tagId))
-					.where(inArray(tables.incidentTags.incidentId, incidentIds))
-			);
-
-			for (const row of tagRows) {
-				if (!tagsByIncident.has(row.incidentId)) {
-					tagsByIncident.set(row.incidentId, []);
-				}
-				tagsByIncident.get(row.incidentId).push(row.tagName);
-			}
+		if (error) {
+			throw error;
 		}
 
-		const results = incidentRows.map((row) => {
-			const createdAt = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
-			const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
-			return {
-				id: row.id,
-				title: row.title,
-				caseCode: row.caseCode,
-				description: row.description,
-				status: row.status,
-				created_at: createdAt.toISOString(),
-				updated_at: updatedAt.toISOString(),
-				tags: tagsByIncident.get(row.id) ?? [],
-				ai_playbook: row.ai_playbook ?? '',
-				ai_escalation: row.ai_escalation ?? '',
-				ai_escalation_likelihood: row.ai_escalation_likelihood ?? 'unknown',
-				ai_contact_category: row.ai_contact_category ?? '',
-				ai_contact_code: row.ai_contact_code ?? '',
-				ai_contact_name: row.ai_contact_name ?? '',
-				ai_contact_email: row.ai_contact_email ?? '',
-				ai_contact_role: row.ai_contact_role ?? '',
-				ai_escalation_subject: row.ai_escalation_subject ?? '',
-				ai_escalation_message: row.ai_escalation_message ?? '',
-				ai_escalation_reasoning: row.ai_escalation_reasoning ?? '',
-				ai_description: row.ai_description ?? ''
-			};
+		const results = (data ?? []).map(mapIncidentRowFromSupabase);
+
+		const aiStatuses = results.map(
+			/** @type {(item: ReturnType<typeof mapIncidentRowFromSupabase>) => { id: number; hasAi: boolean }} */ (
+				(item) => ({
+					id: item.id,
+					hasAi: Boolean(item.ai_playbook || item.ai_escalation)
+				})
+			)
+		);
+		console.log('[Incidents][GET] Retrieved incidents', {
+			page,
+			pageSize,
+			total: totalCount,
+			aiStatuses
 		});
 
-		const aiStatuses = results.map((item) => ({
-			id: item.id,
-			hasAi: Boolean(item.ai_playbook || item.ai_escalation)
-		}));
-		console.log('[Incidents][GET] Retrieved incidents', { page, pageSize, total, aiStatuses });
-
-		return json({ total, results });
+		return json({ total: totalCount, results });
 	} catch (error) {
-		console.error('Failed to load incidents from database:', error);
+		console.error('Failed to load incidents from Supabase:', error);
 		return json({ error: 'Failed to load incidents' }, { status: 500 });
 	}
 }
@@ -195,14 +209,15 @@ export async function POST(event) {
 		return json({ error: 'Missing fields' }, { status: 400 });
 	}
 
-	if (!db) {
+	if (!supabase) {
 		return json({ error: 'Database not configured' }, { status: 503 });
 	}
 
 	const now = new Date();
+	const nowIso = now.toISOString();
 
 	try {
-		const dbUserId = await ensureDbUserRecord(user);
+		const dbUserId = await ensureDbUserRecord(supabase, user);
 
 		if (!title) {
 			title = await generateIncidentTitle({ caseCode, description, tags });
@@ -212,29 +227,34 @@ export async function POST(event) {
 			title = `Incident ${caseCode}`;
 		}
 
-		const insertResult = await db.insert(tables.incidents).values({
-			title,
-			caseCode,
-			description,
-			status: DEFAULT_STATUS,
-			createdBy: dbUserId,
-			createdAt: now,
-			updatedAt: now,
-			ai_playbook: '',
-			ai_escalation: '',
-			ai_escalation_likelihood: 'unknown'
-		});
+		const { data: insertedIncident, error: insertError } = await supabase
+			.from('incidents')
+			.insert({
+				title,
+				case_code: caseCode,
+				description,
+				status: DEFAULT_STATUS,
+				created_by: dbUserId,
+				created_at: nowIso,
+				updated_at: nowIso,
+				ai_playbook: '',
+				ai_escalation: '',
+				ai_escalation_likelihood: 'unknown'
+			})
+			.select('id')
+			.single();
 
-		const insertIdRaw = extractInsertId(insertResult);
-		const incidentId = normalizeInsertId(insertIdRaw);
+		if (insertError || !insertedIncident) {
+			throw insertError ?? new Error('Failed to create incident');
+		}
 
-		if (incidentId === null) {
-			console.error('Insert result missing ID', insertResult);
-			throw new Error('Failed to retrieve incident ID after insert');
+		const incidentId = Number(insertedIncident.id);
+		if (!Number.isFinite(incidentId)) {
+			throw new Error('Invalid incident identifier returned from Supabase');
 		}
 
 		if (tags.length > 0) {
-			await persistIncidentTags(incidentId, tags);
+			await persistIncidentTags(supabase, incidentId, tags);
 		}
 
 		console.log('[Incidents][POST] Persisted new incident', {
@@ -253,8 +273,8 @@ export async function POST(event) {
 			caseCode,
 			description,
 			status: DEFAULT_STATUS,
-			created_at: now.toISOString(),
-			updated_at: now.toISOString(),
+			created_at: nowIso,
+			updated_at: nowIso,
 			tags,
 			ai_playbook: '',
 			ai_escalation: '',
@@ -270,7 +290,7 @@ export async function POST(event) {
 			ai_description: ''
 		};
 
-		scheduleAiGeneration({
+		scheduleAiGeneration(supabase, {
 			incidentId,
 			title,
 			caseCode,
@@ -290,53 +310,60 @@ export async function POST(event) {
  * @param {number} incidentId
  * @param {string[]} tags
  */
-async function persistIncidentTags(incidentId, tags) {
-	if (!db || tags.length === 0) return;
+/**
+ * @param {any} client
+ * @param {number} incidentId
+ * @param {string[]} tags
+ */
+async function persistIncidentTags(client, incidentId, tags) {
+	if (!client || tags.length === 0) return;
 
-	const existingTags = /** @type {Array<{ id: number; name: string }>} */ (
-		await db
-			.select({ id: tables.tags.id, name: tables.tags.name })
-			.from(tables.tags)
-			.where(inArray(tables.tags.name, tags))
-	);
+	const upsertPayload = tags.map((name) => ({ name }));
+	const { error: upsertError } = await client
+		.from('tags')
+		.upsert(upsertPayload, { onConflict: 'name' });
 
-	const existingByName = new Map(existingTags.map((tag) => [tag.name, tag]));
-	const missingTags = tags.filter((tag) => !existingByName.has(tag));
-
-	for (const tag of missingTags) {
-		try {
-			await db.insert(tables.tags).values({ name: tag });
-		} catch (error) {
-			if (!isDuplicateKeyError(error)) {
-				throw error;
-			}
-		}
+	if (upsertError && !isDuplicateKeyError(upsertError)) {
+		throw upsertError;
 	}
 
-	const tagRecords = /** @type {Array<{ id: number; name: string }>} */ (
-		await db
-			.select({ id: tables.tags.id, name: tables.tags.name })
-			.from(tables.tags)
-			.where(inArray(tables.tags.name, tags))
+	const { data: tagRecords, error: selectError } = await client
+		.from('tags')
+		.select('id, name')
+		.in('name', tags);
+
+	if (selectError) {
+		throw selectError;
+	}
+
+	const uniqueTagIds = Array.from(
+		new Set(
+			(tagRecords ?? [])
+				.map(/** @type {(tag: { id: number }) => number} */ (tag) => Number(tag.id))
+				.filter(/** @type {(id: number) => boolean} */ (id) => Number.isFinite(id))
+		)
 	);
 
-	if (tagRecords.length === 0) return;
+	const { error: deleteError } = await client
+		.from('incident_tags')
+		.delete()
+		.eq('incident_id', incidentId);
 
-	const uniqueTagIds = Array.from(new Set(tagRecords.map((tag) => tag.id)));
+	if (deleteError) {
+		throw deleteError;
+	}
 
-	const existingRelations = /** @type {Array<{ tagId: number }>} */ (
-		await db
-			.select({ tagId: tables.incidentTags.tagId })
-			.from(tables.incidentTags)
-			.where(eq(tables.incidentTags.incidentId, incidentId))
-	);
-	const existingRelationIds = new Set(existingRelations.map((row) => row.tagId));
-	const relationValues = uniqueTagIds
-		.filter((tagId) => !existingRelationIds.has(tagId))
-		.map((tagId) => ({ incidentId, tagId }));
+	if (uniqueTagIds.length === 0) return;
 
-	if (relationValues.length > 0) {
-		await db.insert(tables.incidentTags).values(relationValues);
+	const relationValues = uniqueTagIds.map((tagId) => ({
+		incident_id: incidentId,
+		tag_id: tagId
+	}));
+
+	const { error: relationError } = await client.from('incident_tags').insert(relationValues);
+
+	if (relationError) {
+		throw relationError;
 	}
 }
 
@@ -344,8 +371,12 @@ async function persistIncidentTags(incidentId, tags) {
  * Ensure the authenticated user has a row in the SQL users table (required for FK constraints)
  * @param {{ id: number; email: string; name?: string }} user
  */
-async function ensureDbUserRecord(user) {
-	if (!db) {
+/**
+ * @param {any} client
+ * @param {{ id: number; email: string; name?: string }} user
+ */
+async function ensureDbUserRecord(client, user) {
+	if (!client) {
 		throw new Error('Database not configured');
 	}
 
@@ -353,51 +384,62 @@ async function ensureDbUserRecord(user) {
 		throw new Error('Authenticated user is missing an email address');
 	}
 
-	const existing = await db
-		.select({ id: tables.users.id })
-		.from(tables.users)
-		.where(eq(tables.users.email, user.email))
-		.limit(1);
+	const {
+		data: existing,
+		error: existingError,
+		status: existingStatus
+	} = await client.from('users').select('id').eq('email', user.email).maybeSingle();
 
-	if (existing.length > 0) {
-		return existing[0].id;
+	if (existingError && existingStatus !== 406) {
+		throw existingError;
+	}
+
+	if (existing?.id) {
+		return existing.id;
 	}
 
 	const fallbackName = user.name || user.email.split('@')[0] || 'Operator';
 
 	try {
-		const insertResult = await db.insert(tables.users).values({
-			email: user.email,
-			name: fallbackName,
-			passwordHash: PLACEHOLDER_PASSWORD_HASH
-		});
+		const { data: inserted, error: insertError } = await client
+			.from('users')
+			.insert({
+				email: user.email,
+				name: fallbackName,
+				password_hash: PLACEHOLDER_PASSWORD_HASH
+			})
+			.select('id')
+			.single();
 
-		const newUserId = Number(insertResult.insertId);
-		if (Number.isFinite(newUserId)) {
-			return newUserId;
+		if (insertError) {
+			throw insertError;
+		}
+
+		if (inserted?.id) {
+			return inserted.id;
 		}
 	} catch (error) {
 		if (isDuplicateKeyError(error)) {
-			const retry = await db
-				.select({ id: tables.users.id })
-				.from(tables.users)
-				.where(eq(tables.users.email, user.email))
-				.limit(1);
-			if (retry.length > 0) {
-				return retry[0].id;
+			const { data: retry } = await client
+				.from('users')
+				.select('id')
+				.eq('email', user.email)
+				.maybeSingle();
+			if (retry?.id) {
+				return retry.id;
 			}
 		}
 		throw error;
 	}
 
-	const finalLookup = await db
-		.select({ id: tables.users.id })
-		.from(tables.users)
-		.where(eq(tables.users.email, user.email))
-		.limit(1);
+	const { data: finalLookup } = await client
+		.from('users')
+		.select('id')
+		.eq('email', user.email)
+		.maybeSingle();
 
-	if (finalLookup.length > 0) {
-		return finalLookup[0].id;
+	if (finalLookup?.id) {
+		return finalLookup.id;
 	}
 
 	throw new Error('Failed to create user record for incident author');
@@ -407,9 +449,7 @@ async function ensureDbUserRecord(user) {
  * @param {unknown} error
  */
 function isDuplicateKeyError(error) {
-	return Boolean(
-		error && typeof error === 'object' && 'code' in error && error.code === 'ER_DUP_ENTRY'
-	);
+	return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505');
 }
 
 /**
@@ -429,57 +469,6 @@ function normalizeCaseCode(value) {
 		return '';
 	}
 	return value.trim();
-}
-
-/**
- * @param {unknown} result
- * @returns {unknown}
- */
-function extractInsertId(result) {
-	if (!result) {
-		return null;
-	}
-
-	if (
-		typeof result === 'object' &&
-		result !== null &&
-		!Array.isArray(result) &&
-		'insertId' in result
-	) {
-		const candidate = /** @type {any} */ (result).insertId;
-		return candidate ?? null;
-	}
-
-	if (Array.isArray(result)) {
-		for (const entry of result) {
-			const id = extractInsertId(entry);
-			if (id !== null && id !== undefined) {
-				return id;
-			}
-		}
-	}
-
-	return null;
-}
-
-/**
- * @param {unknown} value
- */
-function normalizeInsertId(value) {
-	if (typeof value === 'bigint') {
-		return Number(value);
-	}
-
-	if (typeof value === 'number') {
-		return Number.isFinite(value) && value > 0 ? value : null;
-	}
-
-	if (typeof value === 'string') {
-		const parsed = Number(value);
-		return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-	}
-
-	return null;
 }
 
 /**
@@ -518,23 +507,25 @@ ${tagsLine}`;
 }
 
 /**
- * @param {{ incidentId: number; title: string; caseCode: string; description: string; tags: string[] }} input
+ * @param {any} client
+ * @param {{ incidentId: number; title: string; caseCode: string; description: string; tags: string[] }} payload
  */
-function scheduleAiGeneration({ incidentId, title, caseCode, description, tags }) {
+function scheduleAiGeneration(client, payload) {
+	if (!client) return;
 	setTimeout(() => {
-		generateAndStoreAiArtifacts({ incidentId, title, caseCode, description, tags }).catch(
-			(error) => {
-				console.error(`AI artifact generation failed for incident ${incidentId}:`, error);
-			}
-		);
+		generateAndStoreAiArtifacts(client, payload).catch((error) => {
+			console.error(`AI artifact generation failed for incident ${payload.incidentId}:`, error);
+		});
 	}, 0);
 }
 
 /**
- * @param {{ incidentId: number; title: string; caseCode: string; description: string; tags: string[] }} input
+ * @param {any} client
+ * @param {{ incidentId: number; title: string; caseCode: string; description: string; tags: string[] }} payload
  */
-async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, description, tags }) {
-	if (!db) return;
+async function generateAndStoreAiArtifacts(client, payload) {
+	if (!client) return;
+	const { incidentId, title, caseCode, description, tags } = payload;
 	try {
 		const playbookContent = await generateAIPlaybook({ title, caseCode, description, tags });
 		const escalationResult = await generateAIEscalation({ title, caseCode, description, tags });
@@ -546,18 +537,23 @@ async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, descri
 			escalationLikelihood: escalationResult?.likelihood ?? 'unknown'
 		});
 
-		await db
-			.update(tables.incidents)
-			.set({
+		const updatedAt = new Date().toISOString();
+		const { error: updateError } = await client
+			.from('incidents')
+			.update({
 				ai_playbook: playbookContent ?? '',
 				ai_escalation: composeEscalationText(
 					escalationResult?.summary,
 					escalationResult?.reasoning
 				),
 				ai_escalation_likelihood: escalationResult?.likelihood ?? 'unknown',
-				updatedAt: new Date()
+				updated_at: updatedAt
 			})
-			.where(eq(tables.incidents.id, incidentId));
+			.eq('id', incidentId);
+
+		if (updateError) {
+			throw updateError;
+		}
 
 		console.log('[Incidents][AI] Stored artifacts', {
 			incidentId,
