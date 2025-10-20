@@ -34,11 +34,13 @@
 <script>
 	let {
 		class: className,
-		variant = 'default',
-		size = 'default',
+		variant = /** @type {'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'} */ (
+			'default'
+		),
+		size = /** @type {'default' | 'sm' | 'lg' | 'icon' | 'icon-sm' | 'icon-lg'} */ ('default'),
 		ref = $bindable(null),
-		href = undefined,
-		type = 'button',
+		href = /** @type {string | undefined} */ (undefined),
+		type = /** @type {'button' | 'submit' | 'reset'} */ ('button'),
 		disabled,
 		children,
 		...restProps

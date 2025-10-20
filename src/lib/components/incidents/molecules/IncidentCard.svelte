@@ -24,7 +24,6 @@
 
 	/**
 	 * @param {unknown} value
-	 * @returns {unknown}
 	 */
 	function parseJsonSafe(value) {
 		if (typeof value !== 'string' || value.trim().length === 0) return null;
@@ -90,22 +89,33 @@
 
 	/**
 	 * @param {unknown} playbook
-	 * @returns {Array<{ stepTitle: string; executionContext: string; procedure: string[] }>}
+	 * @returns {Array<{ stepTitle: string; executionContext: string; procedure: string[]; checklistItems: string[] }>}
 	 */
 	function collectActionSteps(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
 		return ensureArray(source.actionSteps)
 			.map((step) => {
 				const detail = toRecord(step);
+				const procedure = ensureArray(detail.procedure)
+					.map((item) => ensureString(item))
+					.filter(Boolean);
+				const checklistItems = ensureArray(detail.checklistItems)
+					.map((item) => ensureString(item))
+					.filter(Boolean);
 				return {
 					stepTitle: ensureString(detail.stepTitle),
 					executionContext: ensureString(detail.executionContext),
-					procedure: ensureArray(detail.procedure)
-						.map((item) => ensureString(item))
-						.filter(Boolean)
+					procedure,
+					checklistItems
 				};
 			})
-			.filter((step) => step.stepTitle || step.executionContext || step.procedure.length);
+			.filter(
+				(step) =>
+					step.stepTitle ||
+					step.executionContext ||
+					step.procedure.length ||
+					step.checklistItems.length
+			);
 	}
 
 	/**
@@ -121,7 +131,7 @@
 
 	/**
 	 * @param {unknown} playbook
-	 * @returns {Array<{ title: string; items: string[] }>}
+	 * @returns {Array<{ title: string; items: string[]; relatedStep: string }>}
 	 */
 	function collectChecklists(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
@@ -132,10 +142,37 @@
 					title: ensureString(checklist.title),
 					items: ensureArray(checklist.items)
 						.map((entry) => ensureString(entry))
-						.filter(Boolean)
+						.filter(Boolean),
+					relatedStep: ensureString(checklist.relatedStep)
 				};
 			})
 			.filter((item) => item.title || item.items.length);
+	}
+
+	/**
+	 * @param {String} value
+	 */
+	function normaliseLookup(value) {
+		return ensureString(value).toLowerCase();
+	}
+
+	/**
+	 * @param {unknown} value
+	 * @returns {string}
+	 */
+	function formatLikelihood(value) {
+		const normalised = ensureString(value).toLowerCase();
+		if (!normalised) return '';
+		return normalised.charAt(0).toUpperCase() + normalised.slice(1);
+	}
+
+	/**
+	 * @param {string} type
+	 * @param {...(string|number)} parts
+	 * @returns {string}
+	 */
+	function makeCompletionKey(type, ...parts) {
+		return [type, ...parts].map((part) => String(part ?? '')).join('::');
 	}
 
 	/**
@@ -162,6 +199,23 @@
 	const verificationSteps = $derived(() => collectVerificationSteps(playbookData()));
 	const checklists = $derived(() => collectChecklists(playbookData()));
 	const escalationSummary = $derived(() => ensureString(incident?.ai_escalation));
+	const escalationLikelihood = $derived(() => ensureString(incident?.ai_escalation_likelihood));
+	const escalationReasoning = $derived(() => ensureString(incident?.ai_escalation_reasoning));
+	const checklistsByStep = $derived(() => {
+		const map = new Map();
+		for (const entry of checklists()) {
+			const key = normaliseLookup(entry.relatedStep);
+			if (!key) continue;
+			if (!map.has(key)) {
+				map.set(key, []);
+			}
+			map.get(key).push(entry);
+		}
+		return map;
+	});
+	const generalChecklists = $derived(() =>
+		checklists().filter((item) => !normaliseLookup(item.relatedStep))
+	);
 	const playbookHasContent = $derived(() => {
 		const notes = safetyNotes();
 		const steps = actionSteps();
@@ -176,14 +230,20 @@
 		return raw.length > 0 ? raw : '';
 	});
 	const hasRawFallback = $derived(() => rawPlaybookJson().length > 0);
-	const showStructuredAi = $derived(() => playbookHasContent() || escalationHasContent());
+	const aiPending = $derived(() => !playbookHasContent() && !hasRawFallback());
+	const formattedEscalationLikelihood = $derived(() => formatLikelihood(escalationLikelihood()));
+	const descriptionText = $derived(
+		() => ensureString(incident?.ai_description) || ensureString(incident?.description)
+	);
 	const createdDisplay = $derived(() => formatDateTime(incident?.created_at));
 	const updatedDisplay = $derived(() => formatDateTime(incident?.updated_at));
 	const statusValue = $derived(() => ensureString(incident?.status) || 'open');
 	let expanded = $state(false);
+	let showEscalation = $state(false);
 	/** @type {Set<string>} */
-	let checklistCompletion = $state(new Set());
+	let completedItems = $state(new Set());
 	const detailButtonLabel = $derived(() => (expanded ? 'Hide details' : 'Show details'));
+	const escalateButtonLabel = $derived(() => (showEscalation ? 'Hide escalation' : 'Escalate'));
 	/** @type {number | string | null} */
 	let lastIncidentId = null;
 
@@ -191,18 +251,22 @@
 		expanded = !expanded;
 	}
 
+	function toggleEscalation() {
+		showEscalation = !showEscalation;
+	}
+
 	/**
 	 * @param {string} key
 	 * @param {boolean} checked
 	 */
-	function setChecklistItem(key, checked) {
-		const next = new Set(checklistCompletion);
+	function setCompletion(key, checked) {
+		const next = new Set(completedItems);
 		if (checked) {
 			next.add(key);
 		} else {
 			next.delete(key);
 		}
-		checklistCompletion = next;
+		completedItems = next;
 	}
 
 	$effect(() => {
@@ -211,9 +275,20 @@
 			return;
 		}
 		lastIncidentId = currentId;
-		checklistCompletion = new Set();
+		completedItems = new Set();
 		expanded = false;
+		showEscalation = false;
 	});
+
+	/**
+	 * Get the checklists associated with a specific action step.
+	 * @param {String} stepTitle
+	 */
+	function getChecklistsForStep(stepTitle) {
+		const key = normaliseLookup(stepTitle);
+		if (!key) return EMPTY_ARRAY;
+		return checklistsByStep().get(key) ?? EMPTY_ARRAY;
+	}
 </script>
 
 <Card class="incident-card">
@@ -247,7 +322,7 @@
 
 	<CardContent class="incident-body">
 		<h3 class="incident-title">{incident.title}</h3>
-		<p class="incident-description">{incident.description}</p>
+		<p class="incident-description">{descriptionText() || '—'}</p>
 
 		<div class="incident-summary">
 			<div class="summary-pill">
@@ -275,9 +350,28 @@
 			>
 				{detailButtonLabel()}
 			</Button>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				class="toggle-escalation"
+				aria-expanded={showEscalation}
+				onclick={toggleEscalation}
+			>
+				{escalateButtonLabel()}
+			</Button>
 		</div>
 
-		{#if expanded}
+		{#if aiPending()}
+			<div class="ai-loading" role="status" aria-live="polite">
+				<div class="loading-track" aria-hidden="true">
+					<div class="loading-indicator"></div>
+				</div>
+				<span class="loading-text">AI co-pilot is generating guidance…</span>
+			</div>
+		{/if}
+
+		{#if expanded || showEscalation}
 			<div class="incident-details">
 				{#if incident.tags && incident.tags.length > 0}
 					<div class="tag-cloud" aria-label="Incident tags">
@@ -287,125 +381,218 @@
 					</div>
 				{/if}
 
-				<section class="ai-section" aria-label="AI generated guidance">
-					{#if showStructuredAi()}
+				{#if expanded}
+					<section class="ai-section" aria-label="AI playbook guidance">
 						<header class="section-header">
-							<h4>Portwarden AI Guidance</h4>
-							<p>Structured recommendations generated automatically from your incident details.</p>
+							<h4>Remediation Playbook</h4>
+							<p>Operational actions generated automatically for this incident.</p>
 						</header>
 
-						{#if safetyNotes().length}
-							<div class="playbook-block">
-								<h5>Important Safety Notes</h5>
-								<ul>
-									{#each safetyNotes() as note}
-										<li>{note}</li>
-									{/each}
-								</ul>
-							</div>
-						{/if}
+						{#if playbookHasContent()}
+							{#if safetyNotes().length}
+								<div class="playbook-block">
+									<h5>Important Safety Notes</h5>
+									<ul>
+										{#each safetyNotes() as note}
+											<li>{note}</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
 
-						{#if actionSteps().length}
-							<div class="playbook-block">
-								<h5>Action Steps</h5>
-								{#each actionSteps() as step, index}
-									<div class="action-step">
-										<div class="step-header">
-											<span class="step-index">{index + 1}</span>
-											<div>
-												<span class="step-title">{step.stepTitle || 'Operational Step'}</span>
-												{#if step.executionContext}
-													<p class="step-context">{step.executionContext}</p>
-												{/if}
+							{#if actionSteps().length}
+								<div class="playbook-block">
+									<h5>Action Steps</h5>
+									{#each actionSteps() as step, index}
+										{@const stepBaseKey = makeCompletionKey('step', incident.id ?? 'temp', index)}
+										{@const attachedChecklists = getChecklistsForStep(step.stepTitle)}
+										<div class="action-step">
+											<div class="step-header">
+												<span class="step-index">{index + 1}</span>
+												<div>
+													<span class="step-title">{step.stepTitle || 'Operational Step'}</span>
+													{#if step.executionContext}
+														<p class="step-context">{step.executionContext}</p>
+													{/if}
+												</div>
 											</div>
-										</div>
-										{#if step.procedure.length}
-											<ol>
-												{#each step.procedure as item}
-													<li>{item}</li>
-												{/each}
-											</ol>
-										{/if}
-									</div>
-								{/each}
-							</div>
-						{/if}
-
-						{#if verificationSteps().length}
-							<div class="playbook-block">
-								<h5>Verification</h5>
-								<ol class="verification-list">
-									{#each verificationSteps() as step}
-										<li>{step}</li>
-									{/each}
-								</ol>
-							</div>
-						{/if}
-
-						{#if checklists().length}
-							<div class="playbook-block">
-								<h5>Checklists</h5>
-								<div class="checklist-grid">
-									{#each checklists() as checklist, listIndex}
-										<div class="checklist-card">
-											<h6>{checklist.title || 'Checklist'}</h6>
-											<ul>
-												{#each checklist.items as item, itemIndex}
-													{@const itemKey = `${incident.id ?? 'temp'}-${listIndex}-${itemIndex}`}
-													<li class="checklist-item">
-														<label>
-															<input
-																type="checkbox"
-																class="checklist-checkbox"
-																checked={checklistCompletion.has(itemKey)}
-																onchange={(event) =>
-																	setChecklistItem(itemKey, event.currentTarget.checked)}
-															/>
-															<span>{item}</span>
-														</label>
-													</li>
-												{/each}
-											</ul>
+											{#if step.procedure.length}
+												<ol>
+													{#each step.procedure as item}
+														<li>{item}</li>
+													{/each}
+												</ol>
+											{/if}
+											{#if step.checklistItems.length}
+												<ul class="completion-list inline-checklist">
+													{#each step.checklistItems as item, itemIndex}
+														{@const itemKey = makeCompletionKey('inline', stepBaseKey, itemIndex)}
+														<li
+															class="completion-item"
+															class:completed={completedItems.has(itemKey)}
+														>
+															<label>
+																<input
+																	type="checkbox"
+																	checked={completedItems.has(itemKey)}
+																	onchange={(event) =>
+																		setCompletion(itemKey, event.currentTarget.checked)}
+																/>
+																<span class="item-text">{item}</span>
+															</label>
+														</li>
+													{/each}
+												</ul>
+											{/if}
+											{#if attachedChecklists.length}
+												<div class="attached-checklists">
+													{#each attachedChecklists as checklist, listIndex}
+														<div class="checklist-card inline">
+															<h6>{checklist.title || 'Checklist'}</h6>
+															<ul class="completion-list">
+																{#each checklist.items as item, itemIndex}
+																	{@const itemKey = makeCompletionKey(
+																		'related',
+																		stepBaseKey,
+																		listIndex,
+																		itemIndex
+																	)}
+																	<li
+																		class="completion-item"
+																		class:completed={completedItems.has(itemKey)}
+																	>
+																		<label>
+																			<input
+																				type="checkbox"
+																				checked={completedItems.has(itemKey)}
+																				onchange={(event) =>
+																					setCompletion(itemKey, event.currentTarget.checked)}
+																			/>
+																			<span class="item-text">{item}</span>
+																		</label>
+																	</li>
+																{/each}
+															</ul>
+														</div>
+													{/each}
+												</div>
+											{/if}
 										</div>
 									{/each}
 								</div>
-							</div>
-						{/if}
+							{/if}
 
-						{#if escalationHasContent()}
-							<div class="playbook-block">
-								<h5>Escalation Summary</h5>
-								<p class="escalation-summary">{escalationSummary()}</p>
-							</div>
-						{/if}
+							{#if verificationSteps().length}
+								<div class="playbook-block">
+									<h5>Verification</h5>
+									<ul class="completion-list verification-list">
+										{#each verificationSteps() as step, index}
+											{@const itemKey = makeCompletionKey('verify', incident.id ?? 'temp', index)}
+											<li class="completion-item" class:completed={completedItems.has(itemKey)}>
+												<label>
+													<input
+														type="checkbox"
+														checked={completedItems.has(itemKey)}
+														onchange={(event) =>
+															setCompletion(itemKey, event.currentTarget.checked)}
+													/>
+													<span class="item-text">{step}</span>
+												</label>
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
 
-						{#if hasRawFallback() && !playbookHasContent()}
+							{#if generalChecklists().length}
+								<div class="playbook-block">
+									<h5>Checklists</h5>
+									<div class="checklist-grid">
+										{#each generalChecklists() as checklist, listIndex}
+											<div class="checklist-card">
+												<h6>{checklist.title || 'Checklist'}</h6>
+												<ul>
+													{#each checklist.items as item, itemIndex}
+														{@const itemKey = makeCompletionKey(
+															'general',
+															incident.id ?? 'temp',
+															listIndex,
+															itemIndex
+														)}
+														<li
+															class="checklist-item completion-item"
+															class:completed={completedItems.has(itemKey)}
+														>
+															<label>
+																<input
+																	type="checkbox"
+																	checked={completedItems.has(itemKey)}
+																	onchange={(event) =>
+																		setCompletion(itemKey, event.currentTarget.checked)}
+																/>
+																<span class="item-text">{item}</span>
+															</label>
+														</li>
+													{/each}
+												</ul>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{/if}
+						{:else if hasRawFallback()}
 							<div class="playbook-block raw-json">
 								<h5>AI Playbook (Raw)</h5>
 								<p class="raw-hint">
-									Portwarden AI returned data outside the standard schema. Review the JSON below.
+									Portwarden AI responded, but structured guidance is still empty. Inspect the raw
+									output below.
 								</p>
 								<pre>{rawPlaybookJson()}</pre>
 							</div>
-						{/if}
-					{:else if hasRawFallback()}
-						<div class="playbook-block raw-json">
-							<h5>AI Playbook (Raw)</h5>
-							<p class="raw-hint">
-								Portwarden AI responded, but structured guidance is still empty. Inspect the raw
-								output below.
-							</p>
-							<pre>{rawPlaybookJson()}</pre>
-						</div>
-					{:else}
-						<div class="ai-loading" role="status" aria-live="polite">
-							<span class="loading-label">Generating AI guidance</span>
-							<div class="loading-bar">
-								<div class="loading-bar__progress"></div>
+						{:else}
+							<div class="ai-placeholder">
+								<p>No AI playbook is available yet. Use the AI Co-pilot to generate one.</p>
 							</div>
-						</div>
-					{/if}
-				</section>
+						{/if}
+					</section>
+				{/if}
+
+				{#if showEscalation}
+					<section class="ai-section escalation-section" aria-label="Escalation guidance">
+						<header class="section-header">
+							<h4>Escalation Details</h4>
+							<p>AI-generated escalation assessment for duty officer review.</p>
+						</header>
+
+						{#if escalationHasContent()}
+							<div class="playbook-block">
+								<h5>Summary</h5>
+								{#if formattedEscalationLikelihood()}
+									<p
+										class="escalation-likelihood"
+										data-likelihood={escalationLikelihood() || 'unknown'}
+									>
+										Likelihood: <strong>{formattedEscalationLikelihood()}</strong>
+									</p>
+								{/if}
+								<p class="escalation-summary">{escalationSummary()}</p>
+								{#if escalationReasoning().length}
+									<div class="escalation-reasoning">
+										<h6>Reasoning</h6>
+										<p>{escalationReasoning()}</p>
+									</div>
+								{/if}
+							</div>
+						{:else}
+							<div class="ai-placeholder">
+								<p>
+									No escalation guidance is available yet. Generate an escalation from the AI
+									Co-pilot.
+								</p>
+							</div>
+						{/if}
+					</section>
+				{/if}
 			</div>
 		{/if}
 	</CardContent>
@@ -513,6 +700,40 @@
 		display: flex;
 		justify-content: flex-start;
 		margin-top: 0.25rem;
+	}
+
+	.ai-loading {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-top: 1rem;
+		padding: 0.9rem 1rem;
+		border-radius: 0.75rem;
+		background: rgba(15, 23, 42, 0.45);
+		border: 1px solid rgba(59, 130, 246, 0.25);
+	}
+
+	.loading-track {
+		position: relative;
+		overflow: hidden;
+		height: 6px;
+		border-radius: 999px;
+		background: rgba(15, 118, 210, 0.2);
+	}
+
+	.loading-indicator {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 40%;
+		border-radius: 999px;
+		background: linear-gradient(90deg, rgba(96, 165, 250, 0.35), rgba(96, 165, 250, 0.8));
+		animation: loading-slide 1.4s ease-in-out infinite;
+	}
+
+	.loading-text {
+		font-size: 0.9rem;
+		color: #bfdbfe;
 	}
 
 	:global(.toggle-details) {
@@ -630,13 +851,7 @@
 
 	.verification-list {
 		margin: 0;
-		padding-left: 1.5rem;
-		color: #cbd5f5;
-		line-height: 1.6;
-	}
-
-	.verification-list li + li {
-		margin-top: 0.35rem;
+		padding: 0;
 	}
 
 	.checklist-grid {
@@ -656,7 +871,34 @@
 		line-height: 1.6;
 	}
 
-	.checklist-item label {
+	.completion-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		color: #cbd5f5;
+		line-height: 1.6;
+	}
+
+	.inline-checklist {
+		margin-top: 0.5rem;
+	}
+
+	.attached-checklists {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+	}
+
+	.checklist-card.inline {
+		background: rgba(15, 23, 42, 0.35);
+		border: 1px dashed rgba(148, 163, 184, 0.25);
+	}
+
+	.completion-item label {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -666,17 +908,45 @@
 		padding: 0.55rem 0.75rem;
 	}
 
-	.checklist-checkbox {
+	.completion-item input[type='checkbox'] {
 		width: 1rem;
 		height: 1rem;
 		margin-top: 0;
 		accent-color: #3b82f6;
 	}
 
-	.checklist-item span {
+	.completion-item .item-text {
 		flex: 1;
 		font-weight: 500;
 		color: #e2e8f0;
+		position: relative;
+		transition: color 0.2s ease;
+	}
+
+	.completion-item .item-text::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 50%;
+		height: 2px;
+		background: rgba(148, 163, 184, 0.45);
+		transform: scaleX(0);
+		transform-origin: left;
+		transition: transform 0.25s ease;
+	}
+
+	.completion-item.completed label {
+		background: rgba(22, 33, 52, 0.55);
+		border-color: rgba(59, 130, 246, 0.35);
+	}
+
+	.completion-item.completed .item-text {
+		color: #94a3b8;
+	}
+
+	.completion-item.completed .item-text::after {
+		transform: scaleX(1);
 	}
 
 	.escalation-summary {
@@ -685,40 +955,12 @@
 		line-height: 1.6;
 	}
 
-	.ai-loading {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1rem;
-		border-radius: 0.85rem;
-		background: rgba(15, 23, 42, 0.55);
-		border: 1px solid rgba(30, 64, 175, 0.3);
-	}
-
-	.loading-label {
-		color: #94a3b8;
-		font-size: 0.95rem;
-	}
-
-	.loading-bar {
-		position: relative;
-		overflow: hidden;
-		height: 0.5rem;
-		border-radius: 999px;
-		background: rgba(148, 163, 184, 0.25);
-	}
-
-	.loading-bar__progress {
-		position: absolute;
-		inset: 0;
-		transform: translateX(-100%);
-		background: linear-gradient(
-			90deg,
-			rgba(59, 130, 246, 0.2),
-			rgba(59, 130, 246, 0.8),
-			rgba(59, 130, 246, 0.2)
-		);
-		animation: loading-slide 2s infinite;
+	.escalation-likelihood {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #bfdbfe;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
 	}
 
 	@keyframes loading-slide {

@@ -26,7 +26,7 @@
 		ref = $bindable(null),
 		href,
 		class: className,
-		variant = 'default',
+		variant = /** @type {'default' | 'secondary' | 'destructive' | 'outline'} */ ('default'),
 		children,
 		...restProps
 	} = $props();

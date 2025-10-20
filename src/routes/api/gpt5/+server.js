@@ -5,6 +5,11 @@ import { generateAIContext } from '$lib/data/knowledgeBase.js';
 import { generateResponseTemplates } from '$lib/ai/trainingAnalyzer.js';
 import { KnowledgeBaseTracker } from '$lib/ai/KnowledgeBaseTracker.js';
 import { ValidationFramework } from '$lib/ai/ValidationFramework.js';
+import {
+	ESCALATION_CONTACT_CATEGORIES,
+	formatContactsForPrompt
+} from '$lib/data/escalationContacts.js';
+import { parsePlaybookJson as parsePlaybookPayload } from '$lib/server/ai/playbookSanitizer.js';
 
 const DEFAULT_DEPLOYMENT = 'gpt-5-mini';
 const DEFAULT_ENDPOINT = 'https://psacodesprint2025.azure-api.net/gpt-5-mini/openai';
@@ -13,18 +18,71 @@ const DEFAULT_API_VERSION = '2025-01-01-preview';
 // Initialize AI enhancement components
 const kbTracker = new KnowledgeBaseTracker();
 const validator = new ValidationFramework();
+const CONTACT_PROMPT_BLOCK = formatContactsForPrompt();
+const CONTACT_CATEGORY_LIST = ESCALATION_CONTACT_CATEGORIES.join(', ');
 
 const SYSTEM_TEXT = `You are Portwarden AI, a maritime duty officer co-pilot.
 - Generate numbered action steps with clear labels
 - Call out where each action runs (database, shell, API, console, etc.)
 - Reference KB articles using provided IDs [KB-1749]
 - Professional tone, operational focus, prioritize safety
-- Follow response format instructions exactly when supplied`;
+- Follow response format instructions exactly when supplied
+- Use only the provided escalation contact roster; do not invent new people or addresses.`;
+
+const CONTACT_SCHEMA = {
+	type: 'object',
+	additionalProperties: false,
+	required: ['name', 'email', 'role'],
+	properties: {
+		name: { type: 'string', minLength: 1 },
+		email: { type: 'string', minLength: 3 },
+		role: { type: 'string', minLength: 1 }
+	}
+};
+
+const ESCALATION_PLAN_SCHEMA = {
+	type: 'object',
+	additionalProperties: false,
+	required: [
+		'category',
+		'categoryCode',
+		'likelihood',
+		'summary',
+		'reasoning',
+		'primaryContact',
+		'recommendedSubject',
+		'recommendedMessage'
+	],
+	properties: {
+		category: { type: 'string', minLength: 1 },
+		categoryCode: { type: 'string', minLength: 1 },
+		likelihood: {
+			type: 'string',
+			enum: ['likely', 'unlikely', 'uncertain']
+		},
+		summary: { type: 'string', minLength: 1 },
+		reasoning: { type: 'string', minLength: 1 },
+		primaryContact: CONTACT_SCHEMA,
+		alternateContacts: {
+			type: 'array',
+			items: CONTACT_SCHEMA
+		},
+		recommendedSubject: { type: 'string', minLength: 1 },
+		recommendedMessage: { type: 'string', minLength: 1 }
+	}
+};
 
 const PLAYBOOK_SCHEMA = {
 	type: 'object',
 	additionalProperties: false,
-	required: ['importantSafetyNotes', 'actionSteps', 'verificationSteps', 'checklists'],
+	required: [
+		'importantSafetyNotes',
+		'actionSteps',
+		'verificationSteps',
+		'checklists',
+		'escalationPlan',
+		'aiDescription'
+	],
 	properties: {
 		importantSafetyNotes: {
 			type: 'array',
@@ -36,12 +94,17 @@ const PLAYBOOK_SCHEMA = {
 			minItems: 1,
 			items: {
 				type: 'object',
-				required: ['stepTitle', 'executionContext', 'procedure'],
+				required: ['stepTitle', 'executionContext', 'procedure', 'checklistItems'],
 				additionalProperties: false,
 				properties: {
 					stepTitle: { type: 'string', minLength: 1 },
 					executionContext: { type: 'string', minLength: 1 },
 					procedure: {
+						type: 'array',
+						minItems: 1,
+						items: { type: 'string', minLength: 1 }
+					},
+					checklistItems: {
 						type: 'array',
 						minItems: 1,
 						items: { type: 'string', minLength: 1 }
@@ -59,7 +122,7 @@ const PLAYBOOK_SCHEMA = {
 			minItems: 1,
 			items: {
 				type: 'object',
-				required: ['title', 'items'],
+				required: ['title', 'items', 'relatedStep'],
 				additionalProperties: false,
 				properties: {
 					title: { type: 'string', minLength: 1 },
@@ -67,10 +130,13 @@ const PLAYBOOK_SCHEMA = {
 						type: 'array',
 						minItems: 1,
 						items: { type: 'string', minLength: 1 }
-					}
+					},
+					relatedStep: { type: 'string' }
 				}
 			}
-		}
+		},
+		escalationPlan: ESCALATION_PLAN_SCHEMA,
+		aiDescription: { type: 'string', minLength: 1 }
 	}
 };
 
@@ -129,11 +195,13 @@ function buildPrompt(incident, intent, sessionId) {
 	const intentInstruction =
 		intent === 'playbook'
 			? `Respond strictly in JSON using these top-level keys:
-		- importantSafetyNotes: array of safety-critical callouts (strings only).
-		- actionSteps: ordered array where each object contains stepTitle, executionContext (note exactly where the work runs), procedure (array of concise instructions).
-		- verificationSteps: ordered array of strings describing how to confirm the remediation worked (mirror knowledge base verification patterns).
-		- checklists: array of objects with title and items (array of checklist bullet strings, include a "Ready to close" list when relevant).
-		Do not include any markdown or commentary outside the JSON object.`
+	- importantSafetyNotes: array of safety-critical callouts (strings only).
+	- actionSteps: ordered array where each object contains stepTitle, executionContext (note exactly where the work runs), procedure (array of concise instructions), and optional checklistItems (array of short checkbox strings for that step).
+	- verificationSteps: ordered array of strings describing how to confirm the remediation worked (mirror knowledge base verification patterns).
+	- checklists: array of objects with title and items (array of checklist bullet strings, include a "Ready to close" list when relevant).
+	- escalationPlan: object with category, categoryCode, likelihood (likely | unlikely | uncertain), summary, reasoning, primaryContact (name, email, role) chosen from the roster below, optional alternateContacts (array matching that structure), recommendedSubject, recommendedMessage (plain text, no markdown). Category must be one of: ${CONTACT_CATEGORY_LIST}.
+	- aiDescription: short (<=90 words) incident synopsis for duty officers. Plain sentences only.
+	Use only the escalation contacts provided below. Do not fabricate names, roles, or emails. Do not include any markdown or commentary outside the JSON object.`
 			: 'Draft escalation summary <180 words in a single paragraph. Do not use bullets, numbered lists, headers, or any content after the paragraph.';
 
 	// Compact prompt structure
@@ -150,6 +218,7 @@ function buildPrompt(incident, intent, sessionId) {
 			: 'No escalation required',
 		incident.ragExtract ? `Guidance: ${incident.ragExtract.substring(0, 150)}...` : '',
 		templateHint,
+		intent === 'playbook' ? `Escalation Contacts:\n${CONTACT_PROMPT_BLOCK}` : '',
 		intentInstruction
 	]
 		.filter(Boolean)
@@ -320,7 +389,7 @@ export async function POST(event) {
 
 	let playbookPayload = null;
 	if (intent === 'playbook') {
-		const parsed = parsePlaybookJson(output);
+		const parsed = parsePlaybookPayload(output);
 		if (!parsed.ok) {
 			console.error('Playbook parsing failed:', parsed.error, { output });
 			return json(
@@ -369,160 +438,4 @@ export async function POST(event) {
 			timestamp: new Date().toISOString()
 		}
 	});
-}
-
-/**
- * @param {string} raw
- * @returns {{ ok: true, value: {
- *   importantSafetyNotes: string[];
- *   actionSteps: Array<{ stepTitle: string; executionContext: string; procedure: string[] }>;
- *   verificationSteps: string[];
- *   checklists: Array<{ title: string; items: string[] }>;
- * }} | { ok: false, error: string }}
- */
-function parsePlaybookJson(raw) {
-	const cleaned = stripJsonFences(raw);
-	let data;
-	try {
-		data = JSON.parse(cleaned);
-	} catch (error) {
-		console.warn('Failed to parse playbook payload JSON:', error);
-		return { ok: false, error: 'INVALID_JSON' };
-	}
-
-	if (!data || typeof data !== 'object' || Array.isArray(data)) {
-		return { ok: false, error: 'INVALID_STRUCTURE' };
-	}
-
-	const importantSafetyNotes = sanitizeStringArray(data.importantSafetyNotes);
-	const actionSteps = sanitizeActionSteps(data.actionSteps);
-	const verificationSteps = sanitizeStringArray(data.verificationSteps);
-	const checklists = sanitizeChecklists(data.checklists);
-
-	if (
-		!importantSafetyNotes.length ||
-		!actionSteps.length ||
-		!verificationSteps.length ||
-		!checklists.length
-	) {
-		return { ok: false, error: 'MISSING_FIELDS' };
-	}
-
-	return {
-		ok: true,
-		value: {
-			importantSafetyNotes,
-			actionSteps,
-			verificationSteps,
-			checklists
-		}
-	};
-}
-
-/**
- * @param {unknown} value
- * @returns {string[]}
- */
-function sanitizeStringArray(value) {
-	if (!Array.isArray(value)) return [];
-	return value.map((item) => normalizeNarrative(item)).filter((item) => item.length > 0);
-}
-
-/**
- * @param {unknown} value
- * @returns {Array<{ stepTitle: string; executionContext: string; procedure: string[] }>}
- */
-function sanitizeActionSteps(value) {
-	if (!Array.isArray(value)) return [];
-	const steps = [];
-	for (const entry of value) {
-		if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
-		const stepTitle = normalizeHeading(entry.stepTitle);
-		const executionContext = normalizeNarrative(entry.executionContext);
-		const procedure = coerceStringList(entry.procedure);
-
-		if (!stepTitle || !executionContext || !procedure.length) continue;
-
-		steps.push({ stepTitle, executionContext, procedure });
-	}
-	return steps;
-}
-
-/**
- * @param {unknown} value
- * @returns {Array<{ title: string; items: string[] }>}
- */
-function sanitizeChecklists(value) {
-	if (!Array.isArray(value)) return [];
-	const lists = [];
-	for (const entry of value) {
-		if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
-		const title = normalizeHeading(entry.title);
-		const items = coerceStringList(entry.items);
-		if (!title || !items.length) continue;
-		lists.push({ title, items });
-	}
-	return lists;
-}
-
-/**
- * @param {unknown} value
- * @returns {string[]}
- */
-function coerceStringList(value) {
-	if (Array.isArray(value)) {
-		return value.map((item) => normalizeNarrative(item)).filter((item) => item.length > 0);
-	}
-	if (typeof value === 'string') {
-		return value
-			.split(/\n+/)
-			.map((item) => normalizeNarrative(item))
-			.filter((item) => item.length > 0);
-	}
-	return [];
-}
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function normalizeNarrative(value) {
-	if (typeof value !== 'string') return '';
-	return value
-		.replace(/\r\n?/g, '\n')
-		.split('\n')
-		.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
-		.filter((line) => line.length > 0)
-		.join(' ')
-		.replace(/\s+/g, ' ')
-		.trim();
-}
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function normalizeHeading(value) {
-	if (typeof value !== 'string') return '';
-	return value
-		.replace(/\r\n?/g, ' ')
-		.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '')
-		.replace(/\s+/g, ' ')
-		.trim();
-}
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-/**
- * @param {string} raw
- * @returns {string}
- */
-function stripJsonFences(raw) {
-	return raw
-		.trim()
-		.replace(/^```json\s*/i, '')
-		.replace(/```$/i, '')
-		.trim();
 }

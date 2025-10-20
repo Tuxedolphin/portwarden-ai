@@ -12,6 +12,19 @@ const DEFAULT_DEPLOYMENT = 'gpt-5-mini';
 const DEFAULT_ENDPOINT = 'https://psacodesprint2025.azure-api.net/gpt-5-mini/openai';
 const DEFAULT_API_VERSION = '2025-01-01-preview';
 const PLACEHOLDER_PASSWORD_HASH = '$argon2id$v=19$m=19456,t=2,p=1$placeholder$placeholderhash';
+const ESCALATION_RESPONSE_SCHEMA = {
+	type: 'object',
+	additionalProperties: false,
+	required: ['summary', 'escalationLikelihood', 'reasoning'],
+	properties: {
+		summary: { type: 'string', minLength: 1 },
+		escalationLikelihood: {
+			type: 'string',
+			enum: ['likely', 'unlikely', 'uncertain']
+		},
+		reasoning: { type: 'string', minLength: 1 }
+	}
+};
 
 export async function GET(event) {
 	const url = new URL(event.request.url);
@@ -39,7 +52,17 @@ export async function GET(event) {
 				updated_at: incident.occurredAt,
 				tags: [],
 				ai_playbook: '',
-				ai_escalation: ''
+				ai_escalation: '',
+				ai_escalation_likelihood: 'unknown',
+				ai_contact_category: '',
+				ai_contact_code: '',
+				ai_contact_name: '',
+				ai_contact_email: '',
+				ai_contact_role: '',
+				ai_escalation_subject: '',
+				ai_escalation_message: '',
+				ai_escalation_reasoning: '',
+				ai_description: ''
 			};
 		});
 
@@ -59,7 +82,7 @@ export async function GET(event) {
 		}
 
 		const incidentRows =
-			/** @type {Array<{ id: number; title: string; caseCode: string; description: string; status: string; createdAt: Date; updatedAt: Date; ai_playbook: string | null; ai_escalation: string | null }>} */ (
+			/** @type {Array<{ id: number; title: string; caseCode: string; description: string; status: string; createdAt: Date; updatedAt: Date; ai_playbook: string | null; ai_escalation: string | null; ai_escalation_likelihood: string | null; ai_contact_category: string | null; ai_contact_code: string | null; ai_contact_name: string | null; ai_contact_email: string | null; ai_contact_role: string | null; ai_escalation_subject: string | null; ai_escalation_message: string | null; ai_escalation_reasoning: string | null; ai_description: string | null }>} */ (
 				await db
 					.select({
 						id: tables.incidents.id,
@@ -70,7 +93,17 @@ export async function GET(event) {
 						createdAt: tables.incidents.createdAt,
 						updatedAt: tables.incidents.updatedAt,
 						ai_playbook: tables.incidents.ai_playbook,
-						ai_escalation: tables.incidents.ai_escalation
+						ai_escalation: tables.incidents.ai_escalation,
+						ai_escalation_likelihood: tables.incidents.ai_escalation_likelihood,
+						ai_contact_category: tables.incidents.ai_contact_category,
+						ai_contact_code: tables.incidents.ai_contact_code,
+						ai_contact_name: tables.incidents.ai_contact_name,
+						ai_contact_email: tables.incidents.ai_contact_email,
+						ai_contact_role: tables.incidents.ai_contact_role,
+						ai_escalation_subject: tables.incidents.ai_escalation_subject,
+						ai_escalation_message: tables.incidents.ai_escalation_message,
+						ai_escalation_reasoning: tables.incidents.ai_escalation_reasoning,
+						ai_description: tables.incidents.ai_description
 					})
 					.from(tables.incidents)
 					.orderBy(desc(tables.incidents.createdAt))
@@ -114,7 +147,17 @@ export async function GET(event) {
 				updated_at: updatedAt.toISOString(),
 				tags: tagsByIncident.get(row.id) ?? [],
 				ai_playbook: row.ai_playbook ?? '',
-				ai_escalation: row.ai_escalation ?? ''
+				ai_escalation: row.ai_escalation ?? '',
+				ai_escalation_likelihood: row.ai_escalation_likelihood ?? 'unknown',
+				ai_contact_category: row.ai_contact_category ?? '',
+				ai_contact_code: row.ai_contact_code ?? '',
+				ai_contact_name: row.ai_contact_name ?? '',
+				ai_contact_email: row.ai_contact_email ?? '',
+				ai_contact_role: row.ai_contact_role ?? '',
+				ai_escalation_subject: row.ai_escalation_subject ?? '',
+				ai_escalation_message: row.ai_escalation_message ?? '',
+				ai_escalation_reasoning: row.ai_escalation_reasoning ?? '',
+				ai_description: row.ai_description ?? ''
 			};
 		});
 
@@ -178,7 +221,8 @@ export async function POST(event) {
 			createdAt: now,
 			updatedAt: now,
 			ai_playbook: '',
-			ai_escalation: ''
+			ai_escalation: '',
+			ai_escalation_likelihood: 'unknown'
 		});
 
 		const insertIdRaw = extractInsertId(insertResult);
@@ -213,7 +257,17 @@ export async function POST(event) {
 			updated_at: now.toISOString(),
 			tags,
 			ai_playbook: '',
-			ai_escalation: ''
+			ai_escalation: '',
+			ai_escalation_likelihood: 'unknown',
+			ai_contact_category: '',
+			ai_contact_code: '',
+			ai_contact_name: '',
+			ai_contact_email: '',
+			ai_contact_role: '',
+			ai_escalation_subject: '',
+			ai_escalation_message: '',
+			ai_escalation_reasoning: '',
+			ai_description: ''
 		};
 
 		scheduleAiGeneration({
@@ -482,23 +536,25 @@ function scheduleAiGeneration({ incidentId, title, caseCode, description, tags }
 async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, description, tags }) {
 	if (!db) return;
 	try {
-		const [playbookContent, escalationContent] = await Promise.all([
-			generateAIPlaybook({ title, caseCode, description, tags }),
-			generateAIEscalation({ title, caseCode, description, tags })
-		]);
+		const playbookContent = await generateAIPlaybook({ title, caseCode, description, tags });
+		const escalationResult = await generateAIEscalation({ title, caseCode, description, tags });
 
 		console.log('[Incidents][AI] Generated artifacts', {
 			incidentId,
 			playbookPreview: typeof playbookContent === 'string' ? playbookContent.slice(0, 200) : null,
-			escalationPreview:
-				typeof escalationContent === 'string' ? escalationContent.slice(0, 200) : null
+			escalationPreview: escalationResult?.summary?.slice(0, 200) ?? null,
+			escalationLikelihood: escalationResult?.likelihood ?? 'unknown'
 		});
 
 		await db
 			.update(tables.incidents)
 			.set({
 				ai_playbook: playbookContent ?? '',
-				ai_escalation: escalationContent ?? '',
+				ai_escalation: composeEscalationText(
+					escalationResult?.summary,
+					escalationResult?.reasoning
+				),
+				ai_escalation_likelihood: escalationResult?.likelihood ?? 'unknown',
 				updatedAt: new Date()
 			})
 			.where(eq(tables.incidents.id, incidentId));
@@ -506,7 +562,8 @@ async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, descri
 		console.log('[Incidents][AI] Stored artifacts', {
 			incidentId,
 			hasPlaybook: Boolean(playbookContent),
-			hasEscalation: Boolean(escalationContent)
+			hasEscalation: Boolean(escalationResult?.summary),
+			escalationLikelihood: escalationResult?.likelihood ?? 'unknown'
 		});
 	} catch (error) {
 		console.error(`Failed to store AI artifacts for incident ${incidentId}:`, error);
@@ -515,6 +572,7 @@ async function generateAndStoreAiArtifacts({ incidentId, title, caseCode, descri
 
 /**
  * @param {{ title: string; caseCode?: string; description: string; tags: string[] }} incident
+ * @returns {Promise<string>}
  */
 async function generateAIPlaybook(incident) {
 	const prompt = buildPlaybookPrompt(incident);
@@ -532,20 +590,25 @@ async function generateAIPlaybook(incident) {
 			type: 'json_schema',
 			json_schema: {
 				name: 'playbook_schema',
+				strict: true,
 				schema: {
 					type: 'object',
+					additionalProperties: false,
 					required: ['importantSafetyNotes', 'actionSteps', 'verificationSteps', 'checklists'],
 					properties: {
 						importantSafetyNotes: { type: 'array', items: { type: 'string' }, minItems: 1 },
 						actionSteps: {
 							type: 'array',
+							minItems: 1,
 							items: {
 								type: 'object',
-								required: ['stepTitle', 'executionContext', 'procedure'],
+								additionalProperties: false,
+								required: ['stepTitle', 'executionContext', 'procedure', 'checklistItems'],
 								properties: {
 									stepTitle: { type: 'string' },
 									executionContext: { type: 'string' },
-									procedure: { type: 'array', items: { type: 'string' }, minItems: 1 }
+									procedure: { type: 'array', items: { type: 'string' }, minItems: 1 },
+									checklistItems: { type: 'array', items: { type: 'string' }, minItems: 1 }
 								}
 							}
 						},
@@ -556,12 +619,15 @@ async function generateAIPlaybook(incident) {
 						},
 						checklists: {
 							type: 'array',
+							minItems: 1,
 							items: {
 								type: 'object',
-								required: ['title', 'items'],
+								additionalProperties: false,
+								required: ['title', 'items', 'relatedStep'],
 								properties: {
 									title: { type: 'string' },
-									items: { type: 'array', items: { type: 'string' }, minItems: 1 }
+									items: { type: 'array', items: { type: 'string' }, minItems: 1 },
+									relatedStep: { type: 'string' }
 								}
 							}
 						}
@@ -589,6 +655,7 @@ async function generateAIPlaybook(incident) {
 
 /**
  * @param {{ title: string; caseCode?: string; description: string; tags: string[] }} incident
+ * @returns {Promise<{ summary: string; likelihood: 'likely' | 'unlikely' | 'uncertain' | 'unknown'; reasoning: string } | null>}
  */
 async function generateAIEscalation(incident) {
 	const prompt = buildEscalationPrompt(incident);
@@ -597,25 +664,41 @@ async function generateAIEscalation(incident) {
 		caseCode: incident.caseCode,
 		tagsCount: incident.tags.length
 	});
-	const escalationResponse = await callChatCompletion([
-		{ role: 'system', content: 'You are Portwarden AI, a maritime duty officer co-pilot.' },
-		{ role: 'user', content: prompt }
-	]);
+	const escalationResponse = await callChatCompletion(
+		[
+			{ role: 'system', content: 'You are Portwarden AI, a maritime duty officer co-pilot.' },
+			{ role: 'user', content: prompt }
+		],
+		{
+			type: 'json_schema',
+			json_schema: {
+				name: 'escalation_schema',
+				strict: true,
+				schema: ESCALATION_RESPONSE_SCHEMA
+			}
+		}
+	);
 
-	if (typeof escalationResponse === 'string') {
-		const trimmed = escalationResponse.trim();
-		console.log('[Incidents][AI] Escalation response received', {
-			length: trimmed.length,
-			preview: trimmed.slice(0, 200)
+	if (typeof escalationResponse !== 'string') {
+		console.warn('[Incidents][AI] Escalation response missing or invalid', {
+			type: typeof escalationResponse
 		});
-		return trimmed;
+		return null;
 	}
 
-	console.warn('[Incidents][AI] Escalation response missing or invalid', {
-		type: typeof escalationResponse
+	const trimmed = escalationResponse.trim();
+	console.log('[Incidents][AI] Escalation response received', {
+		length: trimmed.length,
+		preview: trimmed.slice(0, 200)
 	});
 
-	return '';
+	const parsed = parseEscalationPayload(trimmed);
+	if (!parsed) {
+		console.warn('[Incidents][AI] Escalation payload failed validation');
+		return null;
+	}
+
+	return parsed;
 }
 
 /**
@@ -639,7 +722,7 @@ ${incident.description}
 
 ${tagsLine}
 
-Respond in JSON that matches the provided schema (importantSafetyNotes, actionSteps, verificationSteps, checklists).
+Respond in JSON that matches the provided schema (importantSafetyNotes, actionSteps with optional checklistItems arrays, verificationSteps rendered as checklists, and checklists with optional relatedStep mapping back to an action step title).
 Keep instructions concise and operational.`;
 }
 
@@ -653,7 +736,7 @@ function buildEscalationPrompt(incident) {
 	const codeLine = incident.caseCode
 		? `Incident Code: ${incident.caseCode}`
 		: 'Incident Code: not provided';
-	return `Write an escalation summary (<180 words, single paragraph, no bullets) for the following maritime incident.
+	return `Write an escalation assessment for the following maritime incident.
 
 Title: ${incident.title}
 
@@ -662,7 +745,13 @@ ${codeLine}
 Description:
 ${incident.description}
 
-${tagsLine}`;
+${tagsLine}
+
+Respond strictly in JSON with these keys:
+- summary: <180 words single paragraph.
+- escalationLikelihood: one of likely, unlikely, or uncertain to indicate if escalation is required.
+- reasoning: concise justification (<=80 words) for the likelihood rating.
+Do not include markdown or commentary outside the JSON object.`;
 }
 
 /**
@@ -716,4 +805,81 @@ async function callChatCompletion(messages, responseFormat) {
 		usage: data?.usage ?? null
 	});
 	return data.choices?.[0]?.message?.content ?? null;
+}
+
+/**
+ * @param {string} raw
+ * @returns {{ summary: string; likelihood: 'likely' | 'unlikely' | 'uncertain' | 'unknown'; reasoning: string } | null}
+ */
+function parseEscalationPayload(raw) {
+	let payload;
+	try {
+		payload = JSON.parse(raw);
+	} catch (error) {
+		console.warn('[Incidents][AI] Escalation JSON parse failed', error);
+		return null;
+	}
+
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		return null;
+	}
+
+	const summary = sanitizeEscalationText(payload.summary);
+	const reasoning = sanitizeEscalationText(payload.reasoning);
+	const likelihood = normaliseEscalationLikelihood(payload.escalationLikelihood);
+
+	if (!summary) {
+		return null;
+	}
+
+	return { summary, reasoning, likelihood };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function sanitizeEscalationText(value) {
+	if (typeof value !== 'string') return '';
+	return value
+		.replace(/\r\n?/g, '\n')
+		.split('\n')
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.join(' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * @param {unknown} value
+ * @returns {'likely' | 'unlikely' | 'uncertain' | 'unknown'}
+ */
+function normaliseEscalationLikelihood(value) {
+	if (typeof value !== 'string') return 'unknown';
+	const normalised = value.trim().toLowerCase();
+	if (normalised === 'likely' || normalised === 'unlikely' || normalised === 'uncertain') {
+		return normalised;
+	}
+	if (normalised === 'yes' || normalised === 'required' || normalised === 'needed') {
+		return 'likely';
+	}
+	if (normalised === 'no' || normalised === 'not likely' || normalised === 'not_likely') {
+		return 'unlikely';
+	}
+	return 'unknown';
+}
+
+/**
+ * @param {string | null | undefined} summary
+ * @param {string | null | undefined} reasoning
+ * @returns {string}
+ */
+function composeEscalationText(summary, reasoning) {
+	const summaryClean = sanitizeEscalationText(summary);
+	const reasoningClean = sanitizeEscalationText(reasoning);
+	if (summaryClean && reasoningClean) {
+		return `${summaryClean}\n\nLikelihood rationale: ${reasoningClean}`;
+	}
+	return summaryClean || reasoningClean || '';
 }

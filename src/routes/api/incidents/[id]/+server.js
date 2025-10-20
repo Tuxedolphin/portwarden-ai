@@ -65,7 +65,10 @@ export async function PATCH(event) {
 			status: statusToUse,
 			created_at: incident.occurredAt,
 			updated_at: new Date().toISOString(),
-			tags: normalizedTags ?? []
+			tags: normalizedTags ?? [],
+			ai_playbook: '',
+			ai_escalation: '',
+			ai_escalation_likelihood: 'unknown'
 		});
 	}
 
@@ -80,7 +83,8 @@ export async function PATCH(event) {
 				createdAt: tables.incidents.createdAt,
 				updatedAt: tables.incidents.updatedAt,
 				ai_playbook: tables.incidents.ai_playbook,
-				ai_escalation: tables.incidents.ai_escalation
+				ai_escalation: tables.incidents.ai_escalation,
+				ai_escalation_likelihood: tables.incidents.ai_escalation_likelihood
 			})
 			.from(tables.incidents)
 			.where(eq(tables.incidents.id, incidentId))
@@ -116,7 +120,8 @@ export async function PATCH(event) {
 				createdAt: tables.incidents.createdAt,
 				updatedAt: tables.incidents.updatedAt,
 				ai_playbook: tables.incidents.ai_playbook,
-				ai_escalation: tables.incidents.ai_escalation
+				ai_escalation: tables.incidents.ai_escalation,
+				ai_escalation_likelihood: tables.incidents.ai_escalation_likelihood
 			})
 			.from(tables.incidents)
 			.where(eq(tables.incidents.id, incidentId))
@@ -147,7 +152,8 @@ export async function PATCH(event) {
 			updated_at: updatedAt.toISOString(),
 			tags,
 			ai_playbook: fresh.ai_playbook ?? '',
-			ai_escalation: fresh.ai_escalation ?? ''
+			ai_escalation: fresh.ai_escalation ?? '',
+			ai_escalation_likelihood: fresh.ai_escalation_likelihood ?? 'unknown'
 		});
 	} catch (err) {
 		console.error('Error updating incident:', err);
