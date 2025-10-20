@@ -209,9 +209,8 @@ export async function POST(event) {
 	let title = typeof providedTitle === 'string' ? providedTitle.trim() : '';
 	const regenerateTargetId = normalizeInsertId(rawRegenerateId);
 	const isRegeneration = regenerateTargetId !== null;
-	const normalizedStatus = requestedStatus && VALID_STATUSES.has(requestedStatus)
-		? requestedStatus
-		: DEFAULT_STATUS;
+	const normalizedStatus =
+		requestedStatus && VALID_STATUSES.has(requestedStatus) ? requestedStatus : DEFAULT_STATUS;
 
 	if (!isRegeneration && (!caseCode || !description)) {
 		return json({ error: 'Missing fields' }, { status: 400 });
@@ -477,6 +476,24 @@ function normalizeCaseCode(value) {
 		return '';
 	}
 	return value.trim();
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number | null}
+ */
+function normalizeInsertId(value) {
+	if (value === null || value === undefined) {
+		return null;
+	}
+	if (typeof value === 'number') {
+		return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+	}
+	const parsed = Number.parseInt(String(value).trim(), 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return null;
+	}
+	return parsed;
 }
 
 /**
