@@ -20,10 +20,10 @@
 		width: 100%;
 		text-align: left;
 		padding: 1.5rem;
-		border: 1px solid rgba(148, 163, 184, 0.2);
+		border: 1px solid var(--maritime-border);
 		border-radius: 1.5rem;
-		background: linear-gradient(145deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.4));
-		color: inherit;
+		background: var(--maritime-gradient-surface);
+		color: var(--maritime-text-primary);
 		cursor: pointer;
 		transition: all 0.3s ease;
 		font: inherit;
@@ -31,8 +31,15 @@
 
 	.incident-item:hover {
 		transform: translateY(-3px);
-		border-color: rgba(96, 165, 250, 0.6);
+		border-color: var(--maritime-border-hover);
 		box-shadow: 0 20px 40px -15px rgba(96, 165, 250, 0.2);
+	}
+
+	:global(html.light) .incident-item {
+		background: rgba(255, 255, 255, 0.95);
+		border: 1px solid rgba(148, 163, 184, 0.35);
+		box-shadow: 0 12px 30px -18px rgba(15, 23, 42, 0.2);
+		color: #0f172a;
 	}
 
 	.incident-header {
@@ -44,7 +51,7 @@
 
 	.incident-id {
 		font-size: 0.85rem;
-		color: #94a3b8;
+		color: var(--maritime-text-muted);
 		font-family: 'JetBrains Mono', monospace;
 	}
 
@@ -86,15 +93,23 @@
 	.incident-title {
 		font-size: 1.1rem;
 		font-weight: 600;
-		color: var(--maritime-text-primary, #f8fafc);
+		color: var(--maritime-text-primary);
 		margin: 0 0 0.5rem;
+	}
+
+	:global(html.light) .incident-title {
+		color: #0f172a;
 	}
 
 	.incident-summary {
 		font-size: 0.9rem;
-		color: var(--maritime-text-secondary, #cbd5e1);
+		color: var(--maritime-text-secondary);
 		margin: 0 0 1rem;
 		line-height: 1.4;
+	}
+
+	:global(html.light) .incident-summary {
+		color: #1f2937;
 	}
 
 	.incident-meta {
@@ -102,7 +117,11 @@
 		gap: 1.5rem;
 		flex-wrap: wrap;
 		font-size: 0.9rem;
-		color: var(--maritime-text-muted, #94a3b8);
+		color: var(--maritime-text-muted);
+	}
+
+	:global(html.light) .incident-meta {
+		color: #475569;
 	}
 
 	.incident-meta span {

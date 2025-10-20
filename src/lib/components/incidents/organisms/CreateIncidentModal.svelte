@@ -83,13 +83,47 @@
 	}
 
 	.modal-container {
-		background: linear-gradient(145deg, #0f172a, #1e293b);
-		border: 1px solid rgba(148, 163, 184, 0.3);
+		background: var(--maritime-gradient-surface);
+		border: 1px solid var(--maritime-border);
 		border-radius: 1.5rem;
 		width: min(90vw, 600px);
 		max-height: 90vh;
-		overflow: hidden;
+		overflow-y: auto;
+		scrollbar-color: rgba(100, 116, 139, 0.6) rgba(15, 23, 42, 0.9);
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+	}
+
+	:global(html.light) .modal-container {
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.9));
+		border: 1px solid rgba(148, 163, 184, 0.35);
+		box-shadow: 0 25px 50px -20px rgba(15, 23, 42, 0.12);
+		scrollbar-color: rgba(148, 163, 184, 0.5) rgba(226, 232, 240, 0.9);
+	}
+
+	.modal-container::-webkit-scrollbar {
+		width: 0.5rem;
+	}
+
+	.modal-container::-webkit-scrollbar-track {
+		background: rgba(15, 23, 42, 0.9);
+		border-radius: 999px;
+	}
+
+	.modal-container::-webkit-scrollbar-thumb {
+		background: rgba(100, 116, 139, 0.6);
+		border-radius: 999px;
+	}
+
+	:global(html.light) .modal-container::-webkit-scrollbar-track {
+		background: rgba(226, 232, 240, 0.9);
+	}
+
+	:global(html.light) .modal-container::-webkit-scrollbar-thumb {
+		background: rgba(148, 163, 184, 0.5);
+	}
+
+	.modal-container::-webkit-scrollbar-thumb:hover {
+		background: rgba(148, 163, 184, 0.75);
 	}
 
 	.modal-header {
@@ -97,14 +131,18 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 2rem 2rem 1rem;
-		border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+		border-bottom: 1px solid var(--maritime-border);
 	}
 
 	.modal-header h2 {
 		font-size: 1.5rem;
 		font-weight: 700;
-		color: #f8fafc;
+		color: var(--maritime-text-primary);
 		margin: 0;
+	}
+
+	:global(html.light) .modal-header h2 {
+		color: #0f172a;
 	}
 
 	.close-btn {
@@ -120,6 +158,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	:global(html.light) .close-btn {
+		background: rgba(148, 163, 184, 0.25);
+		color: #475569;
 	}
 
 	.close-btn:hover {
@@ -138,21 +181,32 @@
 	.form-group label {
 		display: block;
 		font-weight: 600;
-		color: #e2e8f0;
+		color: var(--maritime-text-primary);
 		margin-bottom: 0.5rem;
+	}
+
+	:global(html.light) .form-group label {
+		color: #0f172a;
 	}
 
 	.form-group input,
 	.form-group textarea {
 		width: 100%;
 		padding: 1rem;
-		border: 1px solid rgba(148, 163, 184, 0.3);
+		border: 1px solid var(--maritime-border);
 		border-radius: 0.75rem;
 		background: rgba(15, 23, 42, 0.8);
-		color: #e2e8f0;
+		color: var(--maritime-text-secondary);
 		font-size: 1rem;
 		transition: all 0.2s ease;
 		backdrop-filter: blur(10px);
+	}
+
+	:global(html.light) .form-group input,
+	:global(html.light) .form-group textarea {
+		background: rgba(255, 255, 255, 0.95);
+		color: #1e293b;
+		border: 1px solid rgba(148, 163, 184, 0.4);
 	}
 
 	.form-group input:focus,
@@ -165,8 +219,12 @@
 	.form-hint {
 		display: block;
 		font-size: 0.85rem;
-		color: #94a3b8;
+		color: var(--maritime-text-muted);
 		margin-top: 0.25rem;
+	}
+
+	:global(html.light) .form-hint {
+		color: #475569;
 	}
 
 	.modal-footer {

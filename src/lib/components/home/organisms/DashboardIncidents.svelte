@@ -7,7 +7,7 @@
 <section class="dashboard-incidents">
 	<div class="incidents-content">
 		<div class="dashboard-grid">
-			<div class="incident-sidebar">
+			<div class="incident-sidebar theme-card">
 				<div class="panel-header">
 					<h3>Live Incidents</h3>
 					<span class="incident-count">{incidents.length} Active</span>
@@ -22,7 +22,7 @@
 				<a href="/incidents" class="view-all-btn">View All Incidents →</a>
 			</div>
 
-			<div class="incident-detail-panel">
+			<div class="incident-detail-panel theme-card">
 				<div class="panel-header">
 					<h3>Port Operations Overview</h3>
 					<div class="status-indicator online">System Online</div>
@@ -30,22 +30,22 @@
 
 				<div class="operations-overview">
 					<div class="overview-grid">
-						<div class="overview-stat">
+						<div class="overview-stat theme-card">
 							<h4>Active Vessels</h4>
 							<span class="overview-value">47</span>
 							<span class="overview-trend">+3 today</span>
 						</div>
-						<div class="overview-stat">
+						<div class="overview-stat theme-card">
 							<h4>Cargo Throughput</h4>
 							<span class="overview-value">12.4K</span>
 							<span class="overview-trend">TEU today</span>
 						</div>
-						<div class="overview-stat">
+						<div class="overview-stat theme-card">
 							<h4>System Health</h4>
 							<span class="overview-value">98.7%</span>
 							<span class="overview-trend">Uptime</span>
 						</div>
-						<div class="overview-stat">
+						<div class="overview-stat theme-card">
 							<h4>Response Time</h4>
 							<span class="overview-value">&lt;2min</span>
 							<span class="overview-trend">Average</span>
@@ -55,9 +55,9 @@
 					<div class="next-actions">
 						<h4>Quick Actions</h4>
 						<div class="action-grid">
-							<a href="/incidents" class="quick-action">Manage Incidents</a>
-							<a href="/archive" class="quick-action">View Archive</a>
-							<button class="quick-action">Generate Report</button>
+							<a href="/incidents" class="quick-action theme-card">Manage Incidents</a>
+							<a href="/archive" class="quick-action theme-card">View Archive</a>
+							<button class="quick-action theme-card">Generate Report</button>
 						</div>
 					</div>
 				</div>
@@ -87,15 +87,21 @@
 	}
 
 	.incident-sidebar {
-		background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7));
-		border: 1px solid rgba(148, 163, 184, 0.2);
+		background: var(--maritime-gradient-surface);
+		border: 1px solid var(--maritime-border);
 		border-radius: 2rem;
 		padding: 2rem;
 		backdrop-filter: blur(10px);
 		height: fit-content;
 		max-height: 80vh;
 		overflow-y: auto;
-		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+		box-shadow: 0 25px 50px -12px var(--maritime-shadow);
+	}
+
+	:global(html.light) .incident-sidebar {
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.85));
+		border: 1px solid rgba(148, 163, 184, 0.35);
+		box-shadow: 0 25px 50px -20px rgba(15, 23, 42, 0.15);
 	}
 
 	.incident-list-items {
@@ -105,12 +111,18 @@
 	}
 
 	.incident-detail-panel {
-		background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7));
-		border: 1px solid rgba(148, 163, 184, 0.2);
+		background: var(--maritime-gradient-surface);
+		border: 1px solid var(--maritime-border);
 		border-radius: 2rem;
 		padding: 2.5rem;
 		backdrop-filter: blur(10px);
-		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+		box-shadow: 0 25px 50px -12px var(--maritime-shadow);
+	}
+
+	:global(html.light) .incident-detail-panel {
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.9));
+		border: 1px solid rgba(148, 163, 184, 0.35);
+		box-shadow: 0 25px 50px -20px rgba(15, 23, 42, 0.12);
 	}
 
 	.panel-header {
@@ -119,37 +131,49 @@
 		align-items: center;
 		margin-bottom: 1.5rem;
 		padding-bottom: 1rem;
-		border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+		border-bottom: 1px solid var(--maritime-border);
 		gap: 1rem;
 	}
 
 	.panel-header h3 {
 		font-size: 1.2rem;
 		font-weight: 600;
-		color: #f8fafc;
+		color: var(--maritime-text-primary);
 		margin: 0;
 		flex: 1;
 		min-width: 0;
 	}
 
+	:global(html.light) .panel-header h3 {
+		color: #0f172a;
+	}
+
 	.incident-count {
-		background: rgba(59, 130, 246, 0.2);
-		color: #bfdbfe;
+		background: rgba(59, 130, 246, 0.16);
+		color: var(--maritime-accent-light);
 		padding: 0.25rem 0.75rem;
 		border-radius: 1rem;
 		font-size: 0.85rem;
 		font-weight: 500;
 	}
 
+	:global(html.light) .incident-count {
+		color: #1d4ed8;
+	}
+
 	.status-indicator.online {
-		background: rgba(34, 197, 94, 0.2);
-		color: #86efac;
+		background: rgba(34, 197, 94, 0.18);
+		color: #16a34a;
 		padding: 0.25rem 0.75rem;
 		border-radius: 1rem;
 		font-size: 0.85rem;
 		font-weight: 500;
 		white-space: nowrap;
 		flex-shrink: 0;
+	}
+
+	:global(html.light) .status-indicator.online {
+		color: #166534;
 	}
 
 	.view-all-btn {
@@ -185,42 +209,63 @@
 	.overview-stat {
 		text-align: center;
 		padding: 1rem;
-		background: rgba(30, 41, 59, 0.6);
 		border-radius: 1rem;
-		border: 1px solid rgba(148, 163, 184, 0.2);
+		border: 1px solid var(--maritime-border);
 		transition: all 0.3s ease;
+	}
+
+	:global(html.light) .overview-stat {
+		background: rgba(255, 255, 255, 0.9);
+		border: 1px solid rgba(148, 163, 184, 0.35);
+		box-shadow: 0 10px 30px -15px rgba(15, 23, 42, 0.15);
 	}
 
 	.overview-stat:hover {
 		transform: translateY(-2px);
-		background: rgba(30, 41, 59, 0.8);
+		background: var(--maritime-gradient-surface-hover);
 	}
 
 	.overview-stat h4 {
 		font-size: 0.9rem;
-		color: #94a3b8;
+		color: var(--maritime-text-muted);
 		margin: 0 0 0.5rem;
 		font-weight: 500;
+	}
+
+	:global(html.light) .overview-stat h4 {
+		color: #475569;
 	}
 
 	.overview-value {
 		font-size: 1.5rem;
 		font-weight: 700;
-		color: #60a5fa;
+		color: var(--maritime-accent);
 		display: block;
 		margin-bottom: 0.25rem;
 	}
 
+	:global(html.light) .overview-value {
+		color: #1d4ed8;
+	}
+
 	.overview-trend {
 		font-size: 0.8rem;
-		color: #34d399;
+		color: #22c55e;
 		font-weight: 500;
 	}
 
+	:global(html.light) .overview-trend {
+		color: #15803d;
+	}
+
 	.next-actions h4 {
-		color: #f8fafc;
+		color: var(--maritime-text-primary);
 		margin: 0 0 1rem;
 		font-size: 1rem;
+	}
+
+	:global(html.light) .next-actions h4 {
+		color: #0f172a;
 	}
 
 	.action-grid {
@@ -231,9 +276,8 @@
 
 	.quick-action {
 		padding: 0.75rem 1rem;
-		background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
-		border: 1px solid rgba(148, 163, 184, 0.3);
-		color: #cbd5e1;
+		border: 1px solid var(--maritime-border);
+		color: var(--maritime-text-secondary);
 		border-radius: 0.75rem;
 		text-decoration: none;
 		transition: all 0.3s ease;
@@ -243,9 +287,19 @@
 		cursor: pointer;
 	}
 
+	:global(html.light) .quick-action {
+		background: rgba(255, 255, 255, 0.95);
+		color: #1e293b;
+	}
+
+	:global(html.light) .quick-action {
+		background: rgba(255, 255, 255, 0.95);
+		color: #1e293b;
+	}
+
 	.quick-action:hover {
-		background: linear-gradient(135deg, #60a5fa, #3b82f6);
-		color: white;
+		background: var(--maritime-gradient-button);
+		color: #fff;
 		transform: translateY(-2px);
 		box-shadow: 0 10px 25px -10px rgba(59, 130, 246, 0.4);
 	}
