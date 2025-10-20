@@ -45,6 +45,7 @@ export const incidents = mysqlTable('incidents', {
 		.notNull(),
 	ai_playbook: text('ai_playbook'),
 	ai_escalation: text('ai_escalation'),
+<<<<<<< Updated upstream
 	ai_escalation_likelihood: varchar('ai_escalation_likelihood', { length: 32 }).default('unknown'),
 	ai_contact_category: varchar('ai_contact_category', { length: 64 }),
 	ai_contact_code: varchar('ai_contact_code', { length: 32 }),
@@ -55,6 +56,9 @@ export const incidents = mysqlTable('incidents', {
 	ai_escalation_message: text('ai_escalation_message'),
 	ai_escalation_reasoning: text('ai_escalation_reasoning'),
 	ai_description: text('ai_description')
+=======
+	archivedAt: datetime('archived_at', { mode: 'date' })
+>>>>>>> Stashed changes
 });
 
 // Incident tags (many-to-many)
@@ -72,8 +76,17 @@ export const archivedIssues = mysqlTable('archived_issues', {
 	id: bigint('id', { mode: 'number', unsigned: true }).primaryKey().autoincrement(),
 	incidentId: bigint('incident_id', { mode: 'number', unsigned: true }),
 	title: varchar('title', { length: 255 }).notNull(),
+	caseCode: varchar('case_code', { length: 64 }),
+	description: text('description'),
 	summary: text('summary').notNull(),
+	status: mysqlEnum('archived_status', ['open', 'in-progress', 'resolved']).default('resolved'),
+	ai_playbook: text('ai_playbook'),
+	ai_escalation: text('ai_escalation'),
+	tagsJson: text('tags_json'),
+	incidentCreatedAt: datetime('incident_created_at', { mode: 'date' }),
+	incidentUpdatedAt: datetime('incident_updated_at', { mode: 'date' }),
 	archivedAt: datetime('archived_at', { mode: 'date' })
 		.default(sql`CURRENT_TIMESTAMP`)
-		.notNull()
+		.notNull(),
+	archivedBy: bigint('archived_by', { mode: 'number', unsigned: true }).references(() => users.id)
 });
