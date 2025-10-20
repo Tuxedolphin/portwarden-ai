@@ -88,8 +88,27 @@
 		border-radius: 1.5rem;
 		width: min(90vw, 600px);
 		max-height: 90vh;
-		overflow: hidden;
+		overflow-y: auto;
+		scrollbar-color: rgba(100, 116, 139, 0.6) rgba(15, 23, 42, 0.9);
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+	}
+
+	.modal-container::-webkit-scrollbar {
+		width: 0.5rem;
+	}
+
+	.modal-container::-webkit-scrollbar-track {
+		background: rgba(15, 23, 42, 0.9);
+		border-radius: 999px;
+	}
+
+	.modal-container::-webkit-scrollbar-thumb {
+		background: rgba(100, 116, 139, 0.6);
+		border-radius: 999px;
+	}
+
+	.modal-container::-webkit-scrollbar-thumb:hover {
+		background: rgba(148, 163, 184, 0.75);
 	}
 
 	.modal-header {
