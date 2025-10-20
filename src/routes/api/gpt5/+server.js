@@ -24,7 +24,7 @@ const SYSTEM_TEXT = `You are Portwarden AI, a maritime duty officer co-pilot.
 const PLAYBOOK_SCHEMA = {
 	type: 'object',
 	additionalProperties: false,
-	required: ['importantSafetyNotes', 'actionSteps', 'languageCommands', 'checklists'],
+	required: ['importantSafetyNotes', 'actionSteps', 'verificationSteps', 'checklists'],
 	properties: {
 		importantSafetyNotes: {
 			type: 'array',
@@ -49,18 +49,10 @@ const PLAYBOOK_SCHEMA = {
 				}
 			}
 		},
-		languageCommands: {
+		verificationSteps: {
 			type: 'array',
 			minItems: 1,
-			items: {
-				type: 'object',
-				required: ['language', 'command'],
-				additionalProperties: false,
-				properties: {
-					language: { type: 'string', minLength: 1 },
-					command: { type: 'string', minLength: 1 }
-				}
-			}
+			items: { type: 'string', minLength: 1 }
 		},
 		checklists: {
 			type: 'array',
@@ -139,7 +131,7 @@ function buildPrompt(incident, intent, sessionId) {
 			? `Respond strictly in JSON using these top-level keys:
 		- importantSafetyNotes: array of safety-critical callouts (strings only).
 		- actionSteps: ordered array where each object contains stepTitle, executionContext (note exactly where the work runs), procedure (array of concise instructions).
-		- languageCommands: array of objects with language (e.g. "sql", "bash", "api") and command (exact string, no markdown fences).
+		- verificationSteps: ordered array of strings describing how to confirm the remediation worked (mirror knowledge base verification patterns).
 		- checklists: array of objects with title and items (array of checklist bullet strings, include a "Ready to close" list when relevant).
 		Do not include any markdown or commentary outside the JSON object.`
 			: 'Draft escalation summary <180 words in a single paragraph. Do not use bullets, numbered lists, headers, or any content after the paragraph.';
@@ -384,7 +376,7 @@ export async function POST(event) {
  * @returns {{ ok: true, value: {
  *   importantSafetyNotes: string[];
  *   actionSteps: Array<{ stepTitle: string; executionContext: string; procedure: string[] }>;
- *   languageCommands: Array<{ language: string; command: string }>;
+ *   verificationSteps: string[];
  *   checklists: Array<{ title: string; items: string[] }>;
  * }} | { ok: false, error: string }}
  */
@@ -394,6 +386,7 @@ function parsePlaybookJson(raw) {
 	try {
 		data = JSON.parse(cleaned);
 	} catch (error) {
+		console.warn('Failed to parse playbook payload JSON:', error);
 		return { ok: false, error: 'INVALID_JSON' };
 	}
 
@@ -403,13 +396,13 @@ function parsePlaybookJson(raw) {
 
 	const importantSafetyNotes = sanitizeStringArray(data.importantSafetyNotes);
 	const actionSteps = sanitizeActionSteps(data.actionSteps);
-	const languageCommands = sanitizeCommands(data.languageCommands);
+	const verificationSteps = sanitizeStringArray(data.verificationSteps);
 	const checklists = sanitizeChecklists(data.checklists);
 
 	if (
 		!importantSafetyNotes.length ||
 		!actionSteps.length ||
-		!languageCommands.length ||
+		!verificationSteps.length ||
 		!checklists.length
 	) {
 		return { ok: false, error: 'MISSING_FIELDS' };
@@ -420,7 +413,7 @@ function parsePlaybookJson(raw) {
 		value: {
 			importantSafetyNotes,
 			actionSteps,
-			languageCommands,
+			verificationSteps,
 			checklists
 		}
 	};
@@ -453,37 +446,6 @@ function sanitizeActionSteps(value) {
 		steps.push({ stepTitle, executionContext, procedure });
 	}
 	return steps;
-}
-
-/**
- * @param {unknown} value
- * @returns {Array<{ language: string; command: string }>}
- */
-function sanitizeCommands(value) {
-	if (!Array.isArray(value)) return [];
-	const result = [];
-	for (const entry of value) {
-		if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
-		let language = '';
-		let command = '';
-		if (typeof entry.language === 'string') {
-			language = normalizeLanguageKey(entry.language);
-		}
-		if (typeof entry.command === 'string') {
-			command = normalizeCommand(entry.command);
-		}
-		// Gracefully handle legacy dictionary format { sql: "..." }
-		if ((!language || !command) && Object.keys(entry).length === 1) {
-			const [legacyLanguage, legacyCommand] = Object.entries(entry)[0];
-			if (typeof legacyCommand === 'string') {
-				language = normalizeLanguageKey(legacyLanguage);
-				command = normalizeCommand(legacyCommand);
-			}
-		}
-		if (!language || !command) continue;
-		result.push({ language, command });
-	}
-	return result;
 }
 
 /**
@@ -553,36 +515,6 @@ function normalizeHeading(value) {
  * @param {unknown} value
  * @returns {string}
  */
-function normalizeLanguageKey(value) {
-	if (typeof value !== 'string') return '';
-	return value.trim().toLowerCase();
-}
-
-/**
- * @param {string} command
- * @returns {string}
- */
-function normalizeCommand(command) {
-	return stripCodeFences(command)
-		.split('\n')
-		.map((line) => line.replace(/^\s+/, ''))
-		.join('\n')
-		.trim();
-}
-
-/**
- * Remove wrapping markdown code fences but keep inner content.
- * @param {string} value
- * @returns {string}
- */
-function stripCodeFences(value) {
-	let output = value.trim();
-	if (/^```/.test(output)) {
-		output = output.replace(/^```[a-zA-Z0-9+-]*\s*/g, '').replace(/```$/g, '');
-	}
-	return output.replace(/\r\n?/g, '\n');
-}
-
 /**
  * @param {string} raw
  * @returns {string}

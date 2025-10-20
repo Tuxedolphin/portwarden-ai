@@ -5,9 +5,6 @@ export type PlaybookPayload = {
 		executionContext: string;
 		procedure: string[];
 	}>;
-	languageCommands: Array<{
-		language: string;
-		command: string;
-	}>;
+	verificationSteps: string[];
 	checklists: Array<{ title: string; items: string[] }>;
 };

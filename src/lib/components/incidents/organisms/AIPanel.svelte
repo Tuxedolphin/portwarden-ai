@@ -23,22 +23,14 @@
 
 	/**
 	 * @param {import('$lib/types/playbook').PlaybookPayload | null} payload
+	 * @returns {string[]}
 	 */
-	function buildLanguageCommandGroups(payload) {
-		if (!payload) return [];
-		const map = new Map();
-		for (const entry of payload.languageCommands) {
-			if (!entry || typeof entry.language !== 'string' || typeof entry.command !== 'string') {
-				continue;
-			}
-			const key = entry.language;
-			if (!map.has(key)) {
-				map.set(key, []);
-			}
-			map.get(key).push(entry.command);
+	function getVerificationSteps(payload) {
+		if (!payload || !Array.isArray(payload.verificationSteps)) {
+			return [];
 		}
-		return Array.from(map, ([language, commands]) => ({ language, commands })).sort((a, b) =>
-			a.language.localeCompare(b.language)
+		return payload.verificationSteps.filter(
+			(step) => typeof step === 'string' && step.trim().length > 0
 		);
 	}
 </script>
@@ -120,19 +112,16 @@
 									</div>
 								</section>
 
-								<section class="playbook-block">
-									<h4>Language Commands</h4>
-									<div class="command-groups">
-										{#each buildLanguageCommandGroups(playbookPayload) as group}
-											<div class="command-card">
-												<h5>{group.language ? group.language.toUpperCase() : 'COMMANDS'}</h5>
-												{#each group.commands as command}
-													<pre><code>{command}</code></pre>
-												{/each}
-											</div>
-										{/each}
-									</div>
-								</section>
+								{#if getVerificationSteps(playbookPayload).length}
+									<section class="playbook-block">
+										<h4>Verification</h4>
+										<ol class="verification-list">
+											{#each getVerificationSteps(playbookPayload) as step}
+												<li>{step}</li>
+											{/each}
+										</ol>
+									</section>
+								{/if}
 
 								<section class="playbook-block">
 									<h4>Checklists</h4>
@@ -407,32 +396,15 @@
 		line-height: 1.5;
 	}
 
-	.command-groups {
-		display: grid;
-		gap: 1rem;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	}
-
-	.command-card {
-		background: rgba(10, 16, 32, 0.6);
-		border: 1px solid rgba(148, 163, 184, 0.1);
-		border-radius: 0.9rem;
-		padding: 1rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.command-card pre {
+	.verification-list {
 		margin: 0;
-		background: rgba(15, 23, 42, 0.9);
-		border: 1px solid rgba(148, 163, 184, 0.12);
-		border-radius: 0.6rem;
-		padding: 0.75rem;
-		font-size: 0.85rem;
-		color: #e2e8f0;
-		white-space: pre-wrap;
-		word-break: break-word;
+		padding-left: 1.25rem;
+		color: #cbd5e1;
+		line-height: 1.5;
+	}
+
+	.verification-list li + li {
+		margin-top: 0.35rem;
 	}
 
 	.checklists {

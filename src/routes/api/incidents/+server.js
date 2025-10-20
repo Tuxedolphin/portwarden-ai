@@ -534,7 +534,7 @@ async function generateAIPlaybook(incident) {
 				name: 'playbook_schema',
 				schema: {
 					type: 'object',
-					required: ['importantSafetyNotes', 'actionSteps', 'languageCommands', 'checklists'],
+					required: ['importantSafetyNotes', 'actionSteps', 'verificationSteps', 'checklists'],
 					properties: {
 						importantSafetyNotes: { type: 'array', items: { type: 'string' }, minItems: 1 },
 						actionSteps: {
@@ -549,16 +549,10 @@ async function generateAIPlaybook(incident) {
 								}
 							}
 						},
-						languageCommands: {
+						verificationSteps: {
 							type: 'array',
-							items: {
-								type: 'object',
-								required: ['language', 'command'],
-								properties: {
-									language: { type: 'string' },
-									command: { type: 'string' }
-								}
-							}
+							items: { type: 'string' },
+							minItems: 1
 						},
 						checklists: {
 							type: 'array',
@@ -645,7 +639,7 @@ ${incident.description}
 
 ${tagsLine}
 
-Respond in JSON that matches the provided schema (importantSafetyNotes, actionSteps, languageCommands, checklists).
+Respond in JSON that matches the provided schema (importantSafetyNotes, actionSteps, verificationSteps, checklists).
 Keep instructions concise and operational.`;
 }
 

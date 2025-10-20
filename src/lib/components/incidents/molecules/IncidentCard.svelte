@@ -12,7 +12,7 @@
 		onDelete = () => {}
 	} = $props();
 
-	/** @typedef {{ importantSafetyNotes?: unknown; actionSteps?: unknown; languageCommands?: unknown; checklists?: unknown }} PlaybookShape */
+	/** @typedef {{ importantSafetyNotes?: unknown; actionSteps?: unknown; verificationSteps?: unknown; checklists?: unknown }} PlaybookShape */
 
 	/**
 	 * @param {unknown} value
@@ -110,19 +110,13 @@
 
 	/**
 	 * @param {unknown} playbook
-	 * @returns {Array<{ language: string; command: string }>}
+	 * @returns {string[]}
 	 */
-	function collectLanguageCommands(playbook) {
+	function collectVerificationSteps(playbook) {
 		const source = /** @type {PlaybookShape} */ (toRecord(playbook));
-		return ensureArray(source.languageCommands)
-			.map((entry) => {
-				const command = toRecord(entry);
-				return {
-					language: ensureString(command.language),
-					command: ensureString(command.command)
-				};
-			})
-			.filter((entry) => entry.language || entry.command);
+		return ensureArray(source.verificationSteps)
+			.map((step) => ensureString(step))
+			.filter(Boolean);
 	}
 
 	/**
@@ -165,15 +159,15 @@
 	const playbookData = $derived(() => parseJsonSafe(aiPlaybookRaw()));
 	const safetyNotes = $derived(() => collectSafetyNotes(playbookData()));
 	const actionSteps = $derived(() => collectActionSteps(playbookData()));
-	const languageCommands = $derived(() => collectLanguageCommands(playbookData()));
+	const verificationSteps = $derived(() => collectVerificationSteps(playbookData()));
 	const checklists = $derived(() => collectChecklists(playbookData()));
 	const escalationSummary = $derived(() => ensureString(incident?.ai_escalation));
 	const playbookHasContent = $derived(() => {
 		const notes = safetyNotes();
 		const steps = actionSteps();
-		const commands = languageCommands();
+		const verification = verificationSteps();
 		const lists = checklists();
-		return notes.length > 0 || steps.length > 0 || commands.length > 0 || lists.length > 0;
+		return notes.length > 0 || steps.length > 0 || verification.length > 0 || lists.length > 0;
 	});
 	const escalationHasContent = $derived(() => escalationSummary().length > 0);
 	const rawPlaybookJson = $derived(() => {
@@ -186,7 +180,6 @@
 	const createdDisplay = $derived(() => formatDateTime(incident?.created_at));
 	const updatedDisplay = $derived(() => formatDateTime(incident?.updated_at));
 	const statusValue = $derived(() => ensureString(incident?.status) || 'open');
-
 	let expanded = $state(false);
 	/** @type {Set<string>} */
 	let checklistCompletion = $state(new Set());
@@ -256,6 +249,21 @@
 		<h3 class="incident-title">{incident.title}</h3>
 		<p class="incident-description">{incident.description}</p>
 
+		<div class="incident-summary">
+			<div class="summary-pill">
+				<span class="summary-label">Case Code</span>
+				<span class="summary-value">{incident.caseCode || '—'}</span>
+			</div>
+			<div class="summary-pill">
+				<span class="summary-label">Incident ID</span>
+				<span class="summary-value">#{incident.id}</span>
+			</div>
+			<div class="summary-pill">
+				<span class="summary-label">Last update</span>
+				<span class="summary-value">{updatedDisplay() || createdDisplay()}</span>
+			</div>
+		</div>
+
 		<div class="summary-actions">
 			<Button
 				type="button"
@@ -271,17 +279,6 @@
 
 		{#if expanded}
 			<div class="incident-details">
-				<div class="meta-grid">
-					<div>
-						<span class="meta-label">Incident ID</span>
-						<span class="meta-value">#{incident.id}</span>
-					</div>
-					<div>
-						<span class="meta-label">Case Code</span>
-						<span class="meta-value">{incident.caseCode || '—'}</span>
-					</div>
-				</div>
-
 				{#if incident.tags && incident.tags.length > 0}
 					<div class="tag-cloud" aria-label="Incident tags">
 						{#each incident.tags as tag}
@@ -334,17 +331,14 @@
 							</div>
 						{/if}
 
-						{#if languageCommands().length}
+						{#if verificationSteps().length}
 							<div class="playbook-block">
-								<h5>Language Commands</h5>
-								<div class="language-grid">
-									{#each languageCommands() as entry}
-										<div class="language-card">
-											<span class="language-label">{entry.language || 'Command'}</span>
-											<p>{entry.command}</p>
-										</div>
+								<h5>Verification</h5>
+								<ol class="verification-list">
+									{#each verificationSteps() as step}
+										<li>{step}</li>
 									{/each}
-								</div>
+								</ol>
 							</div>
 						{/if}
 
@@ -415,7 +409,6 @@
 			</div>
 		{/if}
 	</CardContent>
-
 	<CardFooter class="incident-footer">
 		<div class="incident-actions">
 			<Button variant="outline" size="sm" onclick={() => onArchive(incident.id)}>Archive</Button>
@@ -487,9 +480,39 @@
 		line-height: 1.6;
 	}
 
+	.incident-summary {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+
+	.summary-pill {
+		background: rgba(15, 23, 42, 0.65);
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		border-radius: 0.75rem;
+		padding: 0.75rem 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.summary-label {
+		font-size: 0.75rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: rgba(148, 163, 184, 0.85);
+	}
+
+	.summary-value {
+		font-weight: 600;
+		color: #e2e8f0;
+	}
+
 	.summary-actions {
 		display: flex;
 		justify-content: flex-start;
+		margin-top: 0.25rem;
 	}
 
 	:global(.toggle-details) {
@@ -501,27 +524,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
-		margin-top: 1rem;
-	}
-
-	.meta-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 1rem;
-	}
-
-	.meta-label {
-		display: block;
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: rgba(148, 163, 184, 0.8);
-		margin-bottom: 0.25rem;
-	}
-
-	.meta-value {
-		font-weight: 600;
-		color: #e2e8f0;
+		margin-top: 1.5rem;
 	}
 
 	.tag-cloud {
@@ -556,11 +559,12 @@
 	.playbook-block {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1rem;
+		gap: 0.9rem;
+		padding: 1.15rem;
 		border-radius: 0.85rem;
 		background: rgba(15, 23, 42, 0.55);
 		border: 1px solid rgba(30, 64, 175, 0.3);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 	}
 
 	.playbook-block h5 {
@@ -573,9 +577,13 @@
 	.playbook-block ul,
 	.playbook-block ol {
 		margin: 0;
-		padding-left: 1.25rem;
+		padding-left: 1.5rem;
 		color: #cbd5f5;
 		line-height: 1.6;
+	}
+
+	.playbook-block li + li {
+		margin-top: 0.35rem;
 	}
 
 	.action-step {
@@ -620,32 +628,15 @@
 		font-size: 0.9rem;
 	}
 
-	.language-grid {
-		display: grid;
-		gap: 0.75rem;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	}
-
-	.language-card {
-		padding: 0.75rem;
-		border-radius: 0.75rem;
-		background: rgba(30, 64, 175, 0.25);
-		border: 1px solid rgba(37, 99, 235, 0.35);
-	}
-
-	.language-label {
-		display: block;
-		font-size: 0.8rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: #bfdbfe;
-		margin-bottom: 0.35rem;
-	}
-
-	.language-card p {
+	.verification-list {
 		margin: 0;
-		color: #e2e8f0;
+		padding-left: 1.5rem;
+		color: #cbd5f5;
+		line-height: 1.6;
+	}
+
+	.verification-list li + li {
+		margin-top: 0.35rem;
 	}
 
 	.checklist-grid {
@@ -667,19 +658,25 @@
 
 	.checklist-item label {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		gap: 0.75rem;
+		background: rgba(15, 23, 42, 0.35);
+		border: 1px solid rgba(148, 163, 184, 0.15);
+		border-radius: 0.65rem;
+		padding: 0.55rem 0.75rem;
 	}
 
 	.checklist-checkbox {
 		width: 1rem;
 		height: 1rem;
-		margin-top: 0.2rem;
+		margin-top: 0;
 		accent-color: #3b82f6;
 	}
 
 	.checklist-item span {
 		flex: 1;
+		font-weight: 500;
+		color: #e2e8f0;
 	}
 
 	.escalation-summary {
@@ -786,7 +783,6 @@
 			flex-direction: column;
 		}
 
-		.language-grid,
 		.checklist-grid {
 			grid-template-columns: 1fr;
 		}
