@@ -1,13 +1,34 @@
 <script>
 	import { onMount } from 'svelte';
 	import Header from '$lib/components/Header.svelte';
-	/** @type {Array<any>} */
+
+	/**
+	 * @typedef {Object} ArchivedIncident
+	 * @property {number} id
+	 * @property {number | null} incident_id
+	 * @property {string | null} case_code
+	 * @property {string} title
+	 * @property {string | null} description
+	 * @property {string} summary
+	 * @property {string | null} archived_at
+	 * @property {string | null} status
+	 * @property {string | null} ai_playbook
+	 * @property {string | null} ai_escalation
+	 * @property {{ id: string; name: string }[]} tags
+	 * @property {string | null} resolution_time
+	 */
+
+	/** @type {ArchivedIncident[]} */
 	let items = [];
 	let total = 0;
 	let page = 1;
 	let pageSize = 10;
 	let q = '';
 	let tagInput = '';
+	/** @type {number | null} */
+	let busyIncidentId = null;
+	let actionMessage = '';
+	let actionVariant = '';
 
 	async function load() {
 		const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -17,6 +38,85 @@
 		const data = await res.json();
 		items = data.results || [];
 		total = data.total || 0;
+	}
+
+	/**
+	 * @param {ArchivedIncident} incident
+	 */
+	async function unarchive(incident) {
+		if (!incident || !incident.incident_id) {
+			actionVariant = 'error';
+			actionMessage = 'Unable to restore incident: missing reference.';
+			return;
+		}
+
+		busyIncidentId = incident.incident_id;
+		actionMessage = '';
+		actionVariant = '';
+		const label = incident.case_code || `#${incident.incident_id}`;
+		try {
+			const response = await fetch(`/api/incidents/${incident.incident_id}/unarchive`, {
+				method: 'POST'
+			});
+			const payload = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				throw new Error(payload?.error || 'Failed to restore incident');
+			}
+
+			await load();
+			if (items.length === 0 && page > 1) {
+				page = Math.max(1, page - 1);
+				await load();
+			}
+
+			actionVariant = 'success';
+			actionMessage = `Incident ${label} restored to live incidents.`;
+		} catch (error) {
+			actionVariant = 'error';
+			actionMessage = error instanceof Error ? error.message : 'Failed to restore incident';
+		} finally {
+			busyIncidentId = null;
+		}
+	}
+
+	/**
+	 * @param {string | null} value
+	 * @returns {Date | null}
+	 */
+	function parseArchiveDate(value) {
+		if (!value) return null;
+		const candidate = new Date(value);
+		return Number.isNaN(candidate.getTime()) ? null : candidate;
+	}
+
+	/**
+	 * @param {string | null} value
+	 * @param {number} days
+	 * @returns {boolean}
+	 */
+	function isArchivedWithin(value, days) {
+		const archivedAt = parseArchiveDate(value);
+		if (!archivedAt) return false;
+		const threshold = Date.now() - days * 24 * 60 * 60 * 1000;
+		return archivedAt.getTime() > threshold;
+	}
+
+	/**
+	 * @param {string | null} value
+	 * @returns {string}
+	 */
+	function formatArchiveDate(value) {
+		const archivedAt = parseArchiveDate(value);
+		return archivedAt ? archivedAt.toLocaleDateString() : 'Unknown';
+	}
+
+	/**
+	 * @param {string | null} value
+	 * @returns {string}
+	 */
+	function formatArchiveDateTime(value) {
+		const archivedAt = parseArchiveDate(value);
+		return archivedAt ? archivedAt.toLocaleString() : 'Unknown';
 	}
 	onMount(load);
 </script>
@@ -62,17 +162,13 @@
 		</div>
 		<div class="stat-card">
 			<span class="stat-value"
-				>{items.filter(
-					(i) => new Date(i.archived_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-				).length}</span
+				>{items.filter((i) => isArchivedWithin(i.archived_at, 7)).length}</span
 			>
 			<span class="stat-label">This Week</span>
 		</div>
 		<div class="stat-card">
 			<span class="stat-value"
-				>{items.filter(
-					(i) => new Date(i.archived_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-				).length}</span
+				>{items.filter((i) => isArchivedWithin(i.archived_at, 30)).length}</span
 			>
 			<span class="stat-label">This Month</span>
 		</div>
@@ -81,13 +177,16 @@
 
 <!-- Archive Content -->
 <section class="archive-content">
+	{#if actionMessage}
+		<div class="archive-alert {actionVariant}">{actionMessage}</div>
+	{/if}
 	<div class="archive-grid">
 		{#each items as incident}
 			<article class="archive-card">
 				<header class="archive-header">
 					<div class="incident-info">
 						<span class="incident-id">#{incident.id}</span>
-						<span class="archive-date">{new Date(incident.archived_at).toLocaleDateString()}</span>
+						<span class="archive-date">{formatArchiveDate(incident.archived_at)}</span>
 					</div>
 					<div class="status-badge archived">Archived</div>
 				</header>
@@ -108,7 +207,7 @@
 				<footer class="archive-footer">
 					<div class="timeline-info">
 						<span class="timeline-label">Archived:</span>
-						<span class="timeline-value">{new Date(incident.archived_at).toLocaleString()}</span>
+						<span class="timeline-value">{formatArchiveDateTime(incident.archived_at)}</span>
 					</div>
 
 					{#if incident.resolution_time}
@@ -117,6 +216,17 @@
 							<span class="resolution-value">{incident.resolution_time}</span>
 						</div>
 					{/if}
+
+					<div class="archive-actions">
+						<button
+							type="button"
+							class="unarchive-btn"
+							disabled={busyIncidentId === incident.incident_id}
+							on:click={() => unarchive(incident)}
+						>
+							{busyIncidentId === incident.incident_id ? 'Restoring...' : 'Restore Incident'}
+						</button>
+					</div>
 				</footer>
 			</article>
 		{/each}
@@ -567,6 +677,38 @@
 	:global(html.light) .timeline-value,
 	:global(html.light) .resolution-value {
 		color: #1e293b;
+	}
+
+	.archive-actions {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 0.5rem;
+	}
+
+	.unarchive-btn {
+		padding: 0.65rem 1.5rem;
+		background: linear-gradient(
+			135deg,
+			var(--maritime-accent, #3b82f6),
+			var(--maritime-accent-secondary, #1d4ed8)
+		);
+		color: #fff;
+		border: none;
+		border-radius: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.unarchive-btn:hover:not(:disabled) {
+		transform: translateY(-2px);
+		box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.4);
+	}
+
+	.unarchive-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+		box-shadow: none;
 	}
 
 	/* Empty State */

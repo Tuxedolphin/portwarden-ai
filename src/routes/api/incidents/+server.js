@@ -4,13 +4,14 @@ import { requireUser } from '$lib/server/auth';
 import { incidentStatusStore } from '$lib/server/incidentStore.js';
 import { db } from '$lib/server/db';
 import * as tables from '$lib/server/db/schema';
-import { count, desc, eq, inArray } from 'drizzle-orm';
+import { count, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 
 const DEFAULT_STATUS = 'open';
 const DEFAULT_DEPLOYMENT = 'gpt-5-mini';
 const DEFAULT_ENDPOINT = 'https://psacodesprint2025.azure-api.net/gpt-5-mini/openai';
 const DEFAULT_API_VERSION = '2025-01-01-preview';
+const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved']);
 const PLACEHOLDER_PASSWORD_HASH = '$argon2id$v=19$m=19456,t=2,p=1$placeholder$placeholderhash';
 const ESCALATION_RESPONSE_SCHEMA = {
 	type: 'object',
@@ -70,9 +71,12 @@ export async function GET(event) {
 	}
 
 	try {
+		const activeIncidentsFilter = isNull(tables.incidents.archivedAt);
+
 		const [{ value: totalCountRaw } = { value: 0n }] = await db
 			.select({ value: count() })
-			.from(tables.incidents);
+			.from(tables.incidents)
+			.where(activeIncidentsFilter);
 
 		const total = Number(totalCountRaw ?? 0);
 		console.log('[Incidents][GET] Counted incidents', { page, pageSize, total });
@@ -106,6 +110,7 @@ export async function GET(event) {
 						ai_description: tables.incidents.ai_description
 					})
 					.from(tables.incidents)
+					.where(activeIncidentsFilter)
 					.orderBy(desc(tables.incidents.createdAt))
 					.limit(pageSize)
 					.offset(offset)
@@ -183,15 +188,22 @@ export async function POST(event) {
 		caseCode: incomingCaseCode,
 		description: rawDescription,
 		tags: tagNames,
-		title: providedTitle
+		title: providedTitle,
+		status: requestedStatus,
+		regenerateForId: rawRegenerateId
 	} = body || {};
 
-	const caseCode = normalizeCaseCode(incomingCaseCode ?? code);
-	const description = typeof rawDescription === 'string' ? rawDescription.trim() : '';
+	let caseCode = normalizeCaseCode(incomingCaseCode ?? code);
+	let description = typeof rawDescription === 'string' ? rawDescription.trim() : '';
 	const tags = normalizeTags(tagNames);
 	let title = typeof providedTitle === 'string' ? providedTitle.trim() : '';
+	const regenerateTargetId = normalizeInsertId(rawRegenerateId);
+	const isRegeneration = regenerateTargetId !== null;
+	const normalizedStatus = requestedStatus && VALID_STATUSES.has(requestedStatus)
+		? requestedStatus
+		: DEFAULT_STATUS;
 
-	if (!caseCode || !description) {
+	if (!isRegeneration && (!caseCode || !description)) {
 		return json({ error: 'Missing fields' }, { status: 400 });
 	}
 
@@ -202,7 +214,108 @@ export async function POST(event) {
 	const now = new Date();
 
 	try {
-		const dbUserId = await ensureDbUserRecord(user);
+		let dbUserId = null;
+		if (!isRegeneration) {
+			dbUserId = await ensureDbUserRecord(user);
+		}
+
+		if (isRegeneration) {
+			const [existing] = await db
+				.select({
+					id: tables.incidents.id,
+					title: tables.incidents.title,
+					caseCode: tables.incidents.caseCode,
+					description: tables.incidents.description,
+					createdAt: tables.incidents.createdAt,
+					updatedAt: tables.incidents.updatedAt
+				})
+				.from(tables.incidents)
+				.where(eq(tables.incidents.id, regenerateTargetId))
+				.limit(1);
+
+			if (!existing) {
+				return json({ error: 'Incident not found' }, { status: 404 });
+			}
+
+			caseCode = caseCode || existing.caseCode || '';
+			description = description || existing.description || '';
+
+			if (!caseCode || !description) {
+				return json({ error: 'Missing fields' }, { status: 400 });
+			}
+
+			if (!title) {
+				title = existing.title?.trim() ?? '';
+			}
+
+			let activeTags = tags;
+			if (!title) {
+				const tagInput = activeTags.length > 0 ? activeTags : await loadIncidentTagNames(regenerateTargetId);
+				title = await generateIncidentTitle({ caseCode, description, tags: tagInput });
+				activeTags = tagInput;
+			}
+
+			if (!title) {
+				title = `Incident ${caseCode}`;
+			}
+
+			if (tags.length > 0) {
+				await replaceIncidentTags(regenerateTargetId, tags);
+				activeTags = tags;
+			} else {
+				activeTags = await loadIncidentTagNames(regenerateTargetId);
+			}
+
+			await db
+				.update(tables.incidents)
+				.set({
+					title,
+					caseCode,
+					description,
+					status: normalizedStatus,
+					archivedAt: null,
+					updatedAt: now,
+					ai_playbook: '',
+					ai_escalation: ''
+				})
+				.where(eq(tables.incidents.id, regenerateTargetId));
+
+			incidentStatusStore.set(String(regenerateTargetId), normalizedStatus);
+
+			scheduleAiGeneration({
+				incidentId: regenerateTargetId,
+				title,
+				caseCode,
+				description,
+				tags: activeTags
+			});
+
+			const createdAtDate = existing.createdAt instanceof Date
+				? existing.createdAt
+				: new Date(existing.createdAt);
+
+			return json(
+				{
+					id: regenerateTargetId,
+					title,
+					caseCode,
+					description,
+					status: normalizedStatus,
+					created_at: Number.isNaN(createdAtDate.getTime())
+						? new Date().toISOString()
+						: createdAtDate.toISOString(),
+					updated_at: now.toISOString(),
+					tags: activeTags,
+					ai_playbook: '',
+					ai_escalation: ''
+				},
+				{ status: 200 }
+			);
+		}
+
+		if (!caseCode || !description) {
+			return json({ error: 'Missing fields' }, { status: 400 });
+		}
 
 		if (!title) {
 			title = await generateIncidentTitle({ caseCode, description, tags });
@@ -216,7 +329,7 @@ export async function POST(event) {
 			title,
 			caseCode,
 			description,
-			status: DEFAULT_STATUS,
+			status: normalizedStatus,
 			createdBy: dbUserId,
 			createdAt: now,
 			updatedAt: now,
@@ -245,14 +358,14 @@ export async function POST(event) {
 			descriptionPreview: description.slice(0, 200)
 		});
 
-		incidentStatusStore.set(String(incidentId), DEFAULT_STATUS);
+		incidentStatusStore.set(String(incidentId), normalizedStatus);
 
 		const responseIncident = {
 			id: incidentId,
 			title,
 			caseCode,
 			description,
-			status: DEFAULT_STATUS,
+			status: normalizedStatus,
 			created_at: now.toISOString(),
 			updated_at: now.toISOString(),
 			tags,
@@ -338,6 +451,35 @@ async function persistIncidentTags(incidentId, tags) {
 	if (relationValues.length > 0) {
 		await db.insert(tables.incidentTags).values(relationValues);
 	}
+}
+
+/**
+ * @param {number} incidentId
+ * @param {string[]} tags
+ */
+async function replaceIncidentTags(incidentId, tags) {
+	if (!db) return;
+	await db.delete(tables.incidentTags).where(eq(tables.incidentTags.incidentId, incidentId));
+	if (tags.length === 0) {
+		return;
+	}
+	await persistIncidentTags(incidentId, tags);
+}
+
+/**
+ * @param {number} incidentId
+ * @returns {Promise<string[]>}
+ */
+async function loadIncidentTagNames(incidentId) {
+	if (!db) return [];
+	const rows = /** @type {Array<{ tagName: string }>} */ (
+		await db
+			.select({ tagName: tables.tags.name })
+			.from(tables.incidentTags)
+			.innerJoin(tables.tags, eq(tables.tags.id, tables.incidentTags.tagId))
+			.where(eq(tables.incidentTags.incidentId, incidentId))
+	);
+	return rows.map((row) => row.tagName);
 }
 
 /**

@@ -29,11 +29,10 @@
 
 <header class="site-header">
 	<div class="brand">
-		<a href={user ? '/dashboard' : '/'} aria-label="Portwarden AI home">Portwarden AI</a>
+		<a href={user ? '/incidents' : '/'} aria-label="Portwarden AI home">Portwarden AI</a>
 	</div>
 	<nav class="nav" aria-label="Primary">
 		{#if user}
-			<a href="/dashboard" class:active={$page.url.pathname.startsWith('/dashboard')}>Monitor</a>
 			<a href="/incidents" class:active={$page.url.pathname.startsWith('/incidents')}>Incidents</a>
 			<a href="/archive" class:active={$page.url.pathname.startsWith('/archive')}>Archive</a>
 		{:else}
@@ -44,7 +43,6 @@
 	<div class="status">
 		<ThemeToggle size="sm" />
 		{#if user}
-			<span class="pill" title="Open incidents">Open: {openCount}</span>
 			<span class="user" title={user.email}>
 				<span class="avatar"
 					>{user.name
@@ -175,21 +173,6 @@
 		align-items: center;
 		gap: 1rem;
 	}
-	.pill {
-		background: rgba(59, 130, 246, 0.18);
-		color: var(--maritime-accent, #bfdbfe);
-		border: 1px solid rgba(59, 130, 246, 0.35);
-		padding: 0.25rem 0.75rem;
-		border-radius: 999px;
-		font-size: 0.85rem;
-		font-weight: 500;
-		transition: all 0.3s ease;
-	}
-
-	:global(html.light) .pill {
-		background: rgba(59, 130, 246, 0.1);
-		color: var(--maritime-accent, #3b82f6);
-	}
 
 	.avatar {
 		display: inline-flex;
@@ -319,11 +302,6 @@
 			padding: 0.4rem 0.6rem;
 			min-height: 28px;
 		}
-
-		.pill {
-			font-size: 0.8rem;
-			padding: 0.2rem 0.6rem;
-		}
 	}
 
 	@media (max-width: 480px) {
@@ -346,11 +324,6 @@
 
 		.status {
 			gap: 0.4rem;
-		}
-
-		.pill {
-			font-size: 0.75rem;
-			padding: 0.15rem 0.5rem;
 		}
 
 		.link {
