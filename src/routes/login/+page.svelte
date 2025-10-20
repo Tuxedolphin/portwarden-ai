@@ -26,7 +26,7 @@
 			});
 			const data = await res.json();
 			if (!res.ok) throw new Error(data?.error || 'Authentication failed');
-			window.location.href = '/dashboard';
+			await goto('/incidents');
 		} catch (e) {
 			toast = e instanceof Error ? e.message : 'Authentication error';
 		} finally {

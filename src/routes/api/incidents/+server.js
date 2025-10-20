@@ -9,6 +9,7 @@ const DEFAULT_STATUS = 'open';
 const DEFAULT_DEPLOYMENT = 'gpt-5-mini';
 const DEFAULT_ENDPOINT = 'https://psacodesprint2025.azure-api.net/gpt-5-mini/openai';
 const DEFAULT_API_VERSION = '2025-01-01-preview';
+const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved']);
 const PLACEHOLDER_PASSWORD_HASH = '$argon2id$v=19$m=19456,t=2,p=1$placeholder$placeholderhash';
 const ESCALATION_RESPONSE_SCHEMA = {
 	type: 'object',
@@ -197,15 +198,22 @@ export async function POST(event) {
 		caseCode: incomingCaseCode,
 		description: rawDescription,
 		tags: tagNames,
-		title: providedTitle
+		title: providedTitle,
+		status: requestedStatus,
+		regenerateForId: rawRegenerateId
 	} = body || {};
 
-	const caseCode = normalizeCaseCode(incomingCaseCode ?? code);
-	const description = typeof rawDescription === 'string' ? rawDescription.trim() : '';
+	let caseCode = normalizeCaseCode(incomingCaseCode ?? code);
+	let description = typeof rawDescription === 'string' ? rawDescription.trim() : '';
 	const tags = normalizeTags(tagNames);
 	let title = typeof providedTitle === 'string' ? providedTitle.trim() : '';
+	const regenerateTargetId = normalizeInsertId(rawRegenerateId);
+	const isRegeneration = regenerateTargetId !== null;
+	const normalizedStatus = requestedStatus && VALID_STATUSES.has(requestedStatus)
+		? requestedStatus
+		: DEFAULT_STATUS;
 
-	if (!caseCode || !description) {
+	if (!isRegeneration && (!caseCode || !description)) {
 		return json({ error: 'Missing fields' }, { status: 400 });
 	}
 
@@ -265,7 +273,7 @@ export async function POST(event) {
 			descriptionPreview: description.slice(0, 200)
 		});
 
-		incidentStatusStore.set(String(incidentId), DEFAULT_STATUS);
+		incidentStatusStore.set(String(incidentId), normalizedStatus);
 
 		const responseIncident = {
 			id: incidentId,
